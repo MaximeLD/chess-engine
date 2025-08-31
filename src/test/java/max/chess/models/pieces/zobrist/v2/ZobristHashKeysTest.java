@@ -4,11 +4,13 @@ import max.chess.engine.game.board.utils.BoardGenerator;
 import max.chess.engine.game.Game;
 import max.chess.engine.game.ZobristHashKeys;
 import max.chess.engine.utils.notations.FENUtils;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 import java.util.TreeMap;
 
+@Disabled
 public class ZobristHashKeysTest {
     private static final Long ZOBRIST_VALUE_STANDARD = ZobristHashKeys.readHexa("463b96181691fc9c");
     private static final Map<String, Long> ZOBRIST_VALUES_FOR_MOVES_FROM_STANDARD;

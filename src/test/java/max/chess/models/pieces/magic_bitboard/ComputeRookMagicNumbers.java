@@ -1,6 +1,7 @@
 package max.chess.models.pieces.magic_bitboard;
 
 import max.chess.engine.movegen.utils.OrthogonalMoveUtils;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -12,6 +13,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
 
+@Disabled
 public class ComputeRookMagicNumbers {
     @Test
     public void computeRookMagicNumbers() {

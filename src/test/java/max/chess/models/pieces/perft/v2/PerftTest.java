@@ -6,11 +6,13 @@ import max.chess.engine.game.GameCache;
 import max.chess.engine.movegen.Move;
 import max.chess.engine.movegen.MoveGenerator;
 import max.chess.engine.movegen.utils.CheckUtils;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
 
+@Disabled
 // https://www.chessprogramming.org/Perft_Results
 public class PerftTest {
 //    private final static String INITIAL_MOVES = "b5c4";

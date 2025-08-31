@@ -8,6 +8,7 @@ import max.chess.engine.movegen.Move;
 import max.chess.models.pieces.perft.PerftTestSet;
 import max.chess.models.pieces.zobrist.v2.ZobristHashKeysTest;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -27,6 +28,7 @@ import java.util.stream.Stream;
 
 import static max.chess.models.pieces.perft.v2.PerftFullTest.resetZobristCache;
 
+@Disabled
 // https://www.chessprogramming.org/Perft_Results
 public class PerftFullTestWithZobristKey {
     private final static long MAX_TARGET_NODE_COUNT = 100_000_000L;

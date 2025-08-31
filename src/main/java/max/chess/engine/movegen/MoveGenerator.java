@@ -41,17 +41,22 @@ public class MoveGenerator {
     // Keeping it static to prevent re-allocation at each movegen
     static int currentNumberOfMoves;
 
+    private static boolean WARMED_UP = false;
     static {
         warmUp();
     }
 
     public static void warmUp() {
+        if(WARMED_UP) {
+            return;
+        }
         Pawn.warmUp();
         Knight.warmUp();
         King.warmUp();
         Rook.warmUp();
         Bishop.warmUp();
         ObstructedLinesUtils.warmUp();
+        WARMED_UP = true;
     }
 
     public static int[] generateMoves(Game game) {

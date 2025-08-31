@@ -2,6 +2,8 @@ target/
 stockfish/
 profiling/
 backups/
+bayeselo/
+cutechess/
 .idea/
 extract.dll
 extract.exp

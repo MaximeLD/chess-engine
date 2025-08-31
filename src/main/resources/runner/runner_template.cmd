@@ -1,0 +1,1 @@
+C:\Users\maxim\.jdks\graalvm-jdk-24.0.2\bin\java.exe -jar ${project.build.finalName}.jar
