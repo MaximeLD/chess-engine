@@ -1,5 +1,7 @@
 package max.chess.engine.game;
 
+import max.chess.engine.movegen.utils.CheckUtils;
+import max.chess.engine.utils.BitUtils;
 import max.chess.engine.utils.ColorUtils;
 import max.chess.engine.utils.PieceUtils;
 import max.chess.engine.game.board.Board;
@@ -192,6 +194,38 @@ public class Game {
         if(ColorUtils.isBlack(currentPlayer)) {
             fullMoveClock--;
         }
+    }
+
+    public PlayerState getPlayerState() {
+        if(isInsufficientMaterial()) {
+            return PlayerState.DRAW;
+        }
+
+        boolean legalMovePossible = MoveGenerator.countMoves(this) > 0;
+        if(legalMovePossible) {
+            return PlayerState.IN_PROGRESS;
+        }
+
+        // We have no legal move possible, so we are either in pat or checkmate depending on the king check state
+        boolean isKingInCheck = inCheck();
+
+        if(isKingInCheck) {
+            return PlayerState.CHECKMATE;
+        }
+
+        return PlayerState.PAT;
+    }
+
+    public boolean inCheck() {
+        boolean isWhiteTurn = ColorUtils.isWhite(currentPlayer);
+        long usKingBB = board.kingBB & (isWhiteTurn ? board.whiteBB : board.blackBB);
+        int kingPosition = BitUtils.bitScanForward(usKingBB);
+        return MoveGenerator.getCheckersBB(kingPosition, board, ColorUtils.switchColor(currentPlayer), true) != 0;
+    }
+
+    private boolean isInsufficientMaterial() {
+        // TODO
+        return false;
     }
 
     public void setWhiteCanCastleKingSide(boolean whiteCanCastleKingSide) {

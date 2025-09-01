@@ -4,8 +4,8 @@ import max.chess.engine.game.Game;
 import max.chess.engine.game.board.utils.BoardGenerator;
 import max.chess.engine.movegen.Move;
 import max.chess.engine.movegen.MoveGenerator;
-import max.chess.engine.search.NaivePositionEvaluatorSearch;
-import max.chess.engine.search.RandomSearch;
+import max.chess.engine.search.NegamaxDeepeningSearch;
+import max.chess.engine.search.SearchResult;
 import max.chess.engine.utils.notations.FENUtils;
 import max.chess.engine.utils.notations.MoveIOUtils;
 
@@ -44,7 +44,9 @@ public class UciEngineImpl implements UciEngine {
 
     @Override
     public UciResult search(UciServer.GoParams go, AtomicBoolean stopFlag, Consumer<String> infoSink) {
-        return UciResult.best(MoveIOUtils.writeAlgebraicNotation(NaivePositionEvaluatorSearch.pickNextMove(game)));
+        SearchResult searchResult = NegamaxDeepeningSearch.pickNextMove(game, stopFlag, go);
+        infoSink.accept(searchResult.toUCIInfo());
+        return UciResult.best(MoveIOUtils.writeAlgebraicNotation(searchResult.move()));
     }
 
     @Override

@@ -23,9 +23,9 @@ md $outputFolder -ea 0
 & "$cutechess" `
   -engine name=$baseline cmd="cmd" arg="/c" arg="run-$baseline.cmd" dir="$PSScriptRoot" proto=uci `
   -engine name=$candidateName cmd="cmd" arg="/c" arg="run-$candidate.cmd" dir="$PSScriptRoot" proto=uci `
-  -each tc=40/2 `
+  -each tc=40/4 `
   -repeat `
-  -games 200 -concurrency 8 `
+  -games 500 -concurrency 8 `
   -recover `
   -pgnout "$outputFolder\match.pgn"
 #  -debug

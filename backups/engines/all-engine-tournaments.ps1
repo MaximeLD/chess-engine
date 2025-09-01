@@ -11,8 +11,8 @@ $bayes     = Join-Path $PSScriptRoot '..\..\bayeselo\bayeselo_static.exe'
 
 # --- match settings (keep simple/stable for comparisons) ---
 $tc            = '40/2'     # 40 moves / 2s; change if you like
-$gamesPerPair  = 20        # total games per pairing (cutechess will split colors with -repeat)
-$concurrency   = 1          # parallel games (engines should run Threads=1)
+$gamesPerPair  = 100        # total games per pairing (cutechess will split colors with -repeat)
+$concurrency   = 8          # parallel games (engines should run Threads=1)
 
 # --- discover engines ---
 $engineScripts = Get-ChildItem -Path $PSScriptRoot -Filter 'run-*.cmd' | Where-Object { -not $_.PSIsContainer }

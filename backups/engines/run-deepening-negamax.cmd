@@ -1,0 +1,1 @@
+C:\Users\maxim\.jdks\graalvm-jdk-24.0.2\bin\java.exe -jar deepening-negamax-1.0-SNAPSHOT-20250901-220238.jar
