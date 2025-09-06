@@ -42,7 +42,6 @@ public final class SearchConfig {
     public final int  lmrPVMaxReduction;         // (default 1) allow at most 1 ply reduction in PV
     public final int  lmrHistoryPunish;         // (default 0) <= this -> slightly stronger reduction
 
-
     // Futility pruning
     public final boolean useFutility;
     public final boolean useExtendedFutility;
@@ -82,6 +81,13 @@ public final class SearchConfig {
     public final boolean probCutRequireSEEPositive; // true keeps only non-losing captures
     public final int probCutVictimMin;    // e.g., PieceValues.ROOK_VALUE
     public final boolean dangerGatesProbCut; // default true
+
+    // Singular Extension (PV-only)
+    public final boolean useSingularExtension;
+    public final int     seMinDepth;          // minimum depth to consider SE (e.g., 6)
+    public final int     seVerifyReduction;   // verification search reduction (e.g., 3)
+    public final int     seMarginPerDepth;    // margin = depth * seMarginPerDepth (e.g., 24 cp/ply)
+    public final boolean sePvOnly;            // apply SE only on PV nodes (default true)
 
     // Prefer progress, avoid drifting into 3-fold when winning
     public final boolean useEarlyRepetitionDraw;   // detect twofold on stack and score as draw (default: true)
@@ -180,6 +186,13 @@ public final class SearchConfig {
         probCutVictimMin = b.probCutVictimMin;
         dangerGatesProbCut = b.dangerGatesProbCut;
 
+        // Singular Extension
+        useSingularExtension = b.useSingularExtension;
+        seMinDepth = b.seMinDepth;
+        seVerifyReduction = b.seVerifyReduction;
+        seMarginPerDepth = b.seMarginPerDepth;
+        sePvOnly = b.sePvOnly;
+
         useEarlyRepetitionDraw = b.useEarlyRepetitionDraw;
         repScanMaxPlies = b.repScanMaxPlies;
         erdMinDepth = b.erdMinDepth;
@@ -268,6 +281,13 @@ public final class SearchConfig {
         private boolean probCutRequireSEEPositive = true;
         private int probCutVictimMin = max.chess.engine.search.evaluator.PieceValues.ROOK_VALUE;
         private boolean dangerGatesProbCut = true;
+
+        // Singular Extension defaults (conservative)
+        private boolean useSingularExtension = true;
+        private int     seMinDepth = 7;       // start a bit deeper
+        private int     seVerifyReduction = 4; // cheaper verify search
+        private int     seMarginPerDepth = 30; // bigger margin -> fewer extensions
+        private boolean sePvOnly = true;
 
         // Prefer progress, avoid drifting into 3-fold when winning
         public boolean useEarlyRepetitionDraw = true;   // detect twofold on stack and score as draw
@@ -361,6 +381,13 @@ public final class SearchConfig {
         public Builder probCutRequireSEEPositive(boolean v){probCutRequireSEEPositive=v;return this;}
         public Builder probCutVictimMin(int v){probCutVictimMin=v;return this;}
         public Builder dangerGatesProbCut(boolean v){dangerGatesProbCut=v;return this;}
+
+        // Singular Extension setters
+        public Builder useSingularExtension(boolean v){useSingularExtension=v;return this;}
+        public Builder seMinDepth(int v){seMinDepth=v;return this;}
+        public Builder seVerifyReduction(int v){seVerifyReduction=v;return this;}
+        public Builder seMarginPerDepth(int v){seMarginPerDepth=v;return this;}
+        public Builder sePvOnly(boolean v){sePvOnly=v;return this;}
 
         public Builder counterMoveOrderingBonus(int v){counterMoveOrderingBonus=v;return this;}
         public Builder historyCustomScale(int v){historyCustomScale=v;return this;}
