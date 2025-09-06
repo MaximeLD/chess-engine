@@ -7,6 +7,9 @@ import max.chess.engine.game.board.utils.BoardUtils;
 import max.chess.engine.game.board.MovePlayed;
 import max.chess.engine.movegen.Move;
 
+import java.util.Arrays;
+import java.util.List;
+
 public class MoveIOUtils {
     public static String writeAlgebraicNotation(MovePlayed movePlayed) {
         if(movePlayed.castleKingSide()) {
@@ -191,5 +194,12 @@ public class MoveIOUtils {
                 .append(line1).append('\n');
 
         return stringBuilder.toString();
+    }
+
+    public static List<String> getMoveListString(int[] moves) {
+        return Arrays.stream(moves)
+                .mapToObj(move -> new Move(Move.getStartPosition(move), Move.getEndPosition(move), Move.getPieceType(move))
+                        .toString())
+                .toList();
     }
 }

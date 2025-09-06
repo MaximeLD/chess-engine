@@ -15,12 +15,14 @@ public record GameChanges(MovePlayed movePlayed, int previousHalfMoveClock,
     private static final int PREVIOUS_BLACK_CAN_CASTLE_KING_SIDE_MASK = 0b100;
     private static final int PREVIOUS_BLACK_CAN_CASTLE_QUEEN_SIDE_MASK = 0b1000;
     private static final int PREVIOUS_HALF_MOVE_CLOCK_MASK = 0b1111110000;
-    private static final long MOVE_PLAYED_MASK = ~0b1111111111L;
+    private static final long PREVIOUS_EPOCH_MASK = 0b11111111110000000000L;
+    private static final long MOVE_PLAYED_MASK = ~0b11111111111111111111L;
 
     public static long asBytes(long movePlayed, int previousHalfMoveClock, boolean previousWhiteCanCastleKingSide,
                               boolean previousWhiteCanCastleQueenSide, boolean previousBlackCanCastleKingSide,
-                              boolean previousBlackCanCastleQueenSide) {
-        return (movePlayed << 10)
+                              boolean previousBlackCanCastleQueenSide, int previousEpoch) {
+        return (movePlayed << 20)
+                | ((long) previousEpoch << 10)
                 | ((long) previousHalfMoveClock << 4)
                 | ((previousBlackCanCastleQueenSide ? 1 : 0) << 3)
                 | ((previousBlackCanCastleKingSide ? 1 : 0) << 2)
@@ -46,8 +48,12 @@ public record GameChanges(MovePlayed movePlayed, int previousHalfMoveClock,
         return (int) ((bytes & PREVIOUS_HALF_MOVE_CLOCK_MASK) >>> 4);
     }
 
+    public static int getPreviousEpoch(long bytes) {
+        return (int) ((bytes & PREVIOUS_EPOCH_MASK) >>> 10);
+    }
+
     public static int getMovePlayed(long bytes) {
-        return (int) ((bytes & MOVE_PLAYED_MASK) >>> 10);
+        return (int) ((bytes & MOVE_PLAYED_MASK) >>> 20);
     }
 
 }

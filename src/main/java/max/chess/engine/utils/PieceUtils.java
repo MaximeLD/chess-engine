@@ -14,6 +14,7 @@ public class PieceUtils {
     public static final byte ROOK = 4;
     public static final byte QUEEN = 5;
     public static final byte KING = 6;
+    public static final byte ALL = Byte.MAX_VALUE;
 
     // static prebuilt table (index 0..6)
     static final PieceType[] FROM_CODE = {

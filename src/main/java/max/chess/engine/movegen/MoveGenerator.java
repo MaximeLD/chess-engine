@@ -65,37 +65,62 @@ public class MoveGenerator {
         return Arrays.copyOf(moves, currentNumberOfMoves);
     }
 
-    // Useful for perft leaf-node count
+    // Useful for perft leaf-node count and position evaluation
     public static int countMoves(Game game) {
-        return generateMoves(game, null);
+        return countMoves(game, PieceUtils.ALL);
+    }
+
+    // Useful for perft leaf-node count and position evaluation
+    public static int countMoves(Game game, byte requestedPieceType) {
+        return countMoves(game, game.currentPlayer, requestedPieceType);
+    }
+
+    public static int countMoves(Game game, int color, byte requestedPieceType) {
+        return generateMoves(game, null, color, requestedPieceType);
+    }
+
+    // Useful for position evaluation
+    public static int countMovesOpponent(Game game) {
+        return countMovesOpponent(game, PieceUtils.ALL);
+    }
+
+    public static int countMovesOpponent(Game game, byte requestedPieceType) {
+        return countMoves(game, ColorUtils.switchColor(game.currentPlayer), requestedPieceType);
     }
 
     public static int generateMoves(Game game, int[] buffer) {
+        return generateMoves(game, buffer, game.currentPlayer);
+    }
+
+    public static int generateMoves(Game game, int[] buffer, int side) {
+        return generateMoves(game, buffer, side, PieceUtils.ALL);
+    }
+
+    public static int generateMoves(Game game, int[] buffer, int side, byte requestedPieceType) {
         currentNumberOfMoves = 0;
         final long friendlyKingBB;
 
-        if(ColorUtils.isWhite(game.currentPlayer)) {
+        if(ColorUtils.isWhite(side)) {
             friendlyKingBB = game.board().kingBB & game.board().whiteBB;
         } else {
             friendlyKingBB = game.board().kingBB & game.board().blackBB;
         }
 
         final int kingPosition = BitUtils.bitScanForward(friendlyKingBB);
-        final boolean isKingInCheck = getCheckersBB(kingPosition, game.board(), ColorUtils.switchColor(game.currentPlayer), true) != 0;
+        final boolean isKingInCheck = getCheckersBB(kingPosition, game.board(), ColorUtils.switchColor(side), true) != 0;
         if(isKingInCheck) {
             EVASION_MOVES_GENERATORS++;
             // When in check, no need to check every move possible ; we can precisely generate only evasion moves
             // and save CPU time
-            return EvasionMoveGenerator.generateEvasionMoves(game, buffer, kingPosition);
+            return EvasionMoveGenerator.generateEvasionMoves(game, buffer, kingPosition, side, requestedPieceType);
         } else {
             // We are not in check, we should compute the full set of legal moves
             LEGAL_MOVES_GENERATORS++;
-            return generateLegalMoves(game, buffer);
+            return generateLegalMoves(game, buffer, side, requestedPieceType);
         }
     }
 
-    private static int generateLegalMoves(Game game, int[] buffer) {
-        final int currentPlayer = game.currentPlayer;
+    private static int generateLegalMoves(Game game, int[] buffer, int side, byte requestedPieceType) {
         long friendlyBishopBB;
         long friendlyRookBB;
         long friendlyQueenBB;
@@ -105,8 +130,8 @@ public class MoveGenerator {
 
         final long friendlyOccupiedSquareBB;
         final long enemyOccupiedSquareBB;
-        final long pinnedPiecesBB = MoveGenerator.getPinnedBB(game.board(), currentPlayer);
-        boolean isWhiteTurn = ColorUtils.isWhite(currentPlayer);
+        final long pinnedPiecesBB = MoveGenerator.getPinnedBB(game.board(), side);
+        boolean isWhiteTurn = ColorUtils.isWhite(side);
 
         friendlyOccupiedSquareBB = isWhiteTurn ? game.board().whiteBB :  game.board().blackBB;
         enemyOccupiedSquareBB = isWhiteTurn ? game.board().blackBB :  game.board().whiteBB;
@@ -125,69 +150,88 @@ public class MoveGenerator {
         final boolean canCastleKingSide = isWhiteTurn ? game.whiteCanCastleKingSide : game.blackCanCastleKingSide;
         final boolean canCastleQueenSide = isWhiteTurn ? game.whiteCanCastleQueenSide : game.blackCanCastleQueenSide;
 
-        final long kingMovesBB = King.getNonCastleLegalMovesBB(currentPlayer, kingPosition, friendlyOccupiedSquareBB, game.board());
-        addMovesFromBitboard(PieceUtils.KING, kingPosition, kingMovesBB, false, false, game, buffer);
+        if(requestedPieceType == PieceUtils.ALL || requestedPieceType == PieceUtils.KING) {
+            final long kingMovesBB = King.getNonCastleLegalMovesBB(side, kingPosition, friendlyOccupiedSquareBB, game.board());
+            addMovesFromBitboard(PieceUtils.KING, kingPosition, kingMovesBB, false, false, game, buffer);
 
-        if(King.isCastleKingSideLegal(currentPlayer, occupiedSquareBB, false, canCastleKingSide, game.board())) {
-            addKingCastleMove(currentPlayer, buffer);
+            if (King.isCastleKingSideLegal(side, occupiedSquareBB, false, canCastleKingSide, game.board())) {
+                addKingCastleMove(side, buffer);
+            }
+
+            if (King.isCastleQueenSideLegal(side, occupiedSquareBB, false, canCastleQueenSide, game.board())) {
+                addQueenCastleMove(side, buffer);
+            }
         }
 
-        if(King.isCastleQueenSideLegal(currentPlayer, occupiedSquareBB, false, canCastleQueenSide, game.board())) {
-            addQueenCastleMove(currentPlayer, buffer);
+        if(requestedPieceType == PieceUtils.ALL || requestedPieceType == PieceUtils.ROOK || requestedPieceType == PieceUtils.QUEEN) {
+            // Rook moves
+            while (friendlyRookBB != 0) {
+                final int rookPosition = BitUtils.bitScanForward(friendlyRookBB);
+                friendlyRookBB &= friendlyRookBB - 1;
+                long pieceBB = BitUtils.getPositionIndexBitMask(rookPosition);
+                final boolean isPinned = (pinnedPiecesBB & pieceBB) != 0;
+                byte pieceType = (pieceBB & friendlyQueenBB) == 0 ? PieceUtils.ROOK : PieceUtils.QUEEN;
+                if(requestedPieceType != PieceUtils.ALL && requestedPieceType != pieceType) {
+                    continue;
+                }
+                final long rookMovesBB = Rook.getLegalMovesBB(rookPosition, friendlyOccupiedSquareBB, occupiedSquareBB);
+                addMovesFromBitboard(pieceType, rookPosition, rookMovesBB, false, isPinned, game, buffer);
+            }
         }
 
-        // Rook moves
-        while(friendlyRookBB != 0) {
-            final int rookPosition = BitUtils.bitScanForward(friendlyRookBB);
-            friendlyRookBB &= friendlyRookBB - 1;
-            final long rookMovesBB = Rook.getLegalMovesBB(rookPosition, friendlyOccupiedSquareBB, occupiedSquareBB);
-            long pieceBB = BitUtils.getPositionIndexBitMask(rookPosition);
-            final boolean isPinned = (pinnedPiecesBB & pieceBB) != 0;
-            byte pieceType = (pieceBB & friendlyQueenBB) == 0 ? PieceUtils.ROOK : PieceUtils.QUEEN;
-            addMovesFromBitboard(pieceType, rookPosition, rookMovesBB, false, isPinned, game, buffer);
+
+        if(requestedPieceType == PieceUtils.ALL || requestedPieceType == PieceUtils.BISHOP || requestedPieceType == PieceUtils.QUEEN) {
+            // Bishop moves
+            while (friendlyBishopBB != 0) {
+                final int bishopPosition = BitUtils.bitScanForward(friendlyBishopBB);
+                friendlyBishopBB &= friendlyBishopBB - 1;
+                long pieceBB = BitUtils.getPositionIndexBitMask(bishopPosition);
+                final boolean isPinned = (pinnedPiecesBB & pieceBB) != 0;
+                byte pieceType = (pieceBB & friendlyQueenBB) == 0 ? PieceUtils.BISHOP : PieceUtils.QUEEN;
+                if(requestedPieceType != PieceUtils.ALL && requestedPieceType != pieceType) {
+                    continue;
+                }
+
+                final long bishopMovesBB = Bishop.getPseudoLegalMovesBB(bishopPosition, friendlyOccupiedSquareBB, occupiedSquareBB);
+                addMovesFromBitboard(pieceType, bishopPosition, bishopMovesBB, false, isPinned, game, buffer);
+            }
         }
 
-        // Bishop moves
-        while(friendlyBishopBB != 0) {
-            final int bishopPosition = BitUtils.bitScanForward(friendlyBishopBB);
-            friendlyBishopBB &= friendlyBishopBB - 1;
-            final long bishopMovesBB = Bishop.getPseudoLegalMovesBB(bishopPosition, friendlyOccupiedSquareBB, occupiedSquareBB);
-            long pieceBB = BitUtils.getPositionIndexBitMask(bishopPosition);
-            final boolean isPinned = (pinnedPiecesBB & pieceBB) != 0;
-            byte pieceType = (pieceBB & friendlyQueenBB) == 0 ? PieceUtils.BISHOP : PieceUtils.QUEEN;
-            addMovesFromBitboard(pieceType, bishopPosition, bishopMovesBB, false, isPinned, game, buffer);
+
+        if(requestedPieceType == PieceUtils.ALL || requestedPieceType == PieceUtils.KNIGHT) {
+            // Knight moves
+            while (friendlyKnightBB != 0) {
+                final int knightPosition = BitUtils.bitScanForward(friendlyKnightBB);
+                friendlyKnightBB &= friendlyKnightBB - 1;
+                final long knightMovesBB = Knight.getLegalMovesBB(knightPosition, friendlyOccupiedSquareBB);
+                final boolean isPinned = (pinnedPiecesBB & BitUtils.getPositionIndexBitMask(knightPosition)) != 0;
+                addMovesFromBitboard(PieceUtils.KNIGHT, knightPosition, knightMovesBB, false, isPinned, game, buffer);
+            }
         }
 
-        // Knight moves
-        while(friendlyKnightBB != 0) {
-            final int knightPosition = BitUtils.bitScanForward(friendlyKnightBB);
-            friendlyKnightBB &= friendlyKnightBB - 1;
-            final long knightMovesBB = Knight.getLegalMovesBB(knightPosition, friendlyOccupiedSquareBB);
-            final boolean isPinned = (pinnedPiecesBB & BitUtils.getPositionIndexBitMask(knightPosition)) != 0;
-            addMovesFromBitboard(PieceUtils.KNIGHT, knightPosition, knightMovesBB, false, isPinned, game, buffer);
-        }
+        if(requestedPieceType == PieceUtils.ALL || requestedPieceType == PieceUtils.PAWN) {
+            // Pawn moves
+            boolean enPassantPossible = game.board().enPassantFile != -1;
+            long enPassantBitMask = 0L;
+            if (enPassantPossible) {
+                enPassantBitMask = BitUtils.getPositionIndexBitMask(game.board().enPassantIndex);
+            }
 
-        // Pawn moves
-        boolean enPassantPossible = game.board().enPassantFile != -1;
-        long enPassantBitMask = 0L;
-        if(enPassantPossible) {
-            enPassantBitMask = BitUtils.getPositionIndexBitMask(game.board().enPassantIndex);
-        }
+            while (friendlyPawnBB != 0) {
+                final int pawnPosition = BitUtils.bitScanForward(friendlyPawnBB);
+                friendlyPawnBB &= friendlyPawnBB - 1;
+                final long pawnMovesBB = Pawn.getPseudoLegalMovesBB(pawnPosition, side, occupiedSquareBB, enemyOccupiedSquareBB);
+                final boolean promotedMove = (isWhiteTurn && pawnPosition >= 48) || (ColorUtils.isBlack(side) && pawnPosition <= 15);
+                final boolean isPinned = (pinnedPiecesBB & BitUtils.getPositionIndexBitMask(pawnPosition)) != 0;
+                addMovesFromBitboard(PieceUtils.PAWN, pawnPosition, pawnMovesBB, promotedMove, isPinned, game, buffer);
 
-        while(friendlyPawnBB != 0) {
-            final int pawnPosition = BitUtils.bitScanForward(friendlyPawnBB);
-            friendlyPawnBB &= friendlyPawnBB - 1;
-            final long pawnMovesBB = Pawn.getPseudoLegalMovesBB(pawnPosition, currentPlayer, occupiedSquareBB, enemyOccupiedSquareBB);
-            final boolean promotedMove = (isWhiteTurn && pawnPosition >= 48) || (ColorUtils.isBlack(currentPlayer) && pawnPosition <= 15);
-            final boolean isPinned = (pinnedPiecesBB & BitUtils.getPositionIndexBitMask(pawnPosition)) != 0;
-            addMovesFromBitboard(PieceUtils.PAWN, pawnPosition, pawnMovesBB, promotedMove, isPinned, game, buffer);
-
-            // en passant
-            // TODO we could early exit if the pawn position is not one of the 2 candidates for en passant
-            if(enPassantPossible) {
-                final long enPassantBB = Pawn.getAttackBB(pawnPosition, currentPlayer) & enPassantBitMask;
-                if(enPassantBB != 0) {
-                    addEnPassantMove(pawnPosition, game, buffer, true);
+                // en passant
+                // TODO we could early exit if the pawn position is not one of the 2 candidates for en passant
+                if (enPassantPossible) {
+                    final long enPassantBB = Pawn.getAttackBB(pawnPosition, side) & enPassantBitMask;
+                    if (enPassantBB != 0) {
+                        addEnPassantMove(pawnPosition, game, buffer, true);
+                    }
                 }
             }
         }

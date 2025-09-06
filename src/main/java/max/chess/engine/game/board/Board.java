@@ -29,6 +29,11 @@ public class Board {
     public int enPassantFile = -1;
     public int enPassantIndex = -1;
 
+    public boolean whiteCastledKingSide = false;
+    public boolean whiteCastledQueenSide = false;
+    public boolean blackCastledKingSide = false;
+    public boolean blackCastledQueenSide = false;
+
     private final byte[] pieceAt;
 
     public Board(Game game) {
@@ -59,6 +64,10 @@ public class Board {
 
     private byte getPieceCode(long positionBB) {
         return PieceUtils.toPieceCode(pieceAt[BitUtils.bitScanForward(positionBB)]);
+    }
+
+    public byte getPieceTypeAt(int index) {
+        return PieceUtils.toPieceCode(pieceAt[index]);
     }
 
     private int getPieceColor(long positionBB) {
@@ -141,6 +150,10 @@ public class Board {
             }
         }
 
+        if(pieceEaten != PieceUtils.NONE || pieceType == PieceUtils.PAWN) {
+            game.repetitionCounter.resetEpoch();
+        }
+
         return new MovePlayed(pieceType, move, enPassant, castleKingSide, castleQueenSide, pieceEaten, originalEnPassantIndex);
     }
 
@@ -198,6 +211,10 @@ public class Board {
             updateBBs(startPositionBB, endPositionBB, pieceType, pieceColor);
         }
 
+        if(pieceEaten != PieceUtils.NONE || pieceType == PieceUtils.PAWN) {
+            game.repetitionCounter.resetEpoch();
+        }
+
         return MovePlayed.asBytes(move, pieceEaten, originalEnPassantIndex);
     }
 
@@ -231,6 +248,14 @@ public class Board {
 
         updateBBs(originalKingBB, newKingBB, PieceUtils.KING, color);
         updateBBs(originalRookBB, newRookBB, PieceUtils.ROOK, color);
+
+        if(ColorUtils.isWhite(color)) {
+            whiteCastledKingSide = true;
+        } else {
+            blackCastledKingSide = true;
+        }
+
+        game.repetitionCounter.resetEpoch();
     }
 
     private void undoCastleKingSide(int color) {
@@ -249,6 +274,12 @@ public class Board {
 
         updateBBs(originalKingBB, newKingBB, PieceUtils.KING, color);
         updateBBs(originalRookBB, newRookBB, PieceUtils.ROOK, color);
+
+        if(ColorUtils.isWhite(color)) {
+            whiteCastledKingSide = false;
+        } else {
+            blackCastledKingSide = false;
+        }
     }
 
     private void castleQueenSide(int color) {
@@ -267,7 +298,15 @@ public class Board {
 
         updateBBs(originalKingBB, newKingBB, PieceUtils.KING, color);
         updateBBs(originalRookBB, newRookBB, PieceUtils.ROOK, color);
+        game.repetitionCounter.resetEpoch();
+
+        if(ColorUtils.isWhite(color)) {
+            whiteCastledQueenSide = true;
+        } else {
+            blackCastledQueenSide = true;
+        }
     }
+
     private void undoCastleQueenSide(int color) {
         long originalKingBB;
         long originalRookBB;
@@ -284,6 +323,12 @@ public class Board {
 
         updateBBs(originalKingBB, newKingBB, PieceUtils.KING, color);
         updateBBs(originalRookBB, newRookBB, PieceUtils.ROOK, color);
+
+        if(ColorUtils.isWhite(color)) {
+            whiteCastledQueenSide = false;
+        } else {
+            blackCastledQueenSide = false;
+        }
     }
 
     private void removeFromBBs(long bb, byte pieceType, int color) {
@@ -305,7 +350,9 @@ public class Board {
         }
         gameBB &= ~bb;
 
-        pieceAt[BitUtils.bitScanForward(bb)] = PieceUtils.NONE;
+        int positionIndex = BitUtils.bitScanForward(bb);
+        pieceAt[positionIndex] = PieceUtils.NONE;
+        game.setZobristKey(ZobristHashKeys.switchPiecePresence(game.zobristKey(), pieceType, color, positionIndex));
     }
 
     public void addToBBs(long bb, byte pieceType, int color) {
@@ -327,7 +374,9 @@ public class Board {
         }
         gameBB |= bb;
 
-        pieceAt[BitUtils.bitScanForward(bb)] = pieceType;
+        int positionIndex = BitUtils.bitScanForward(bb);
+        pieceAt[positionIndex] = pieceType;
+        game.setZobristKey(ZobristHashKeys.switchPiecePresence(game.zobristKey(), pieceType, color, positionIndex));
     }
 
     private void updateBBs(long oldBB, long newBB, byte pieceType, int color) {
@@ -433,4 +482,18 @@ public class Board {
         return squares;
     }
 
+    public int playNullMove() {
+        int originalEnPassantIndex = enPassantIndex;
+        int move = 0;
+        byte pieceEaten = PieceUtils.NONE;
+
+        setEnPassantIndex(-1);
+
+        return MovePlayed.asBytes(move, pieceEaten, originalEnPassantIndex);
+    }
+
+    public void undoNullMove(int movePlayed) {
+        // Resetting en passant square
+        setEnPassantIndex(MovePlayed.getPreviousEnPassantIndex(movePlayed));
+    }
 }

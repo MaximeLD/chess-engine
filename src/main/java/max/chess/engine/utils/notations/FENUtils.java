@@ -35,6 +35,7 @@ public class FENUtils {
         injectHalfMoveClock(game, halfMoveClock);
         injectFullMoveNumber(game, fullMoveNumber);
 
+        game.recomputeZobristKey();
         return game;
     }
 

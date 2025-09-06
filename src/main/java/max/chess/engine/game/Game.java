@@ -8,6 +8,7 @@ import max.chess.engine.game.board.Board;
 import max.chess.engine.game.board.MovePlayed;
 import max.chess.engine.movegen.Move;
 import max.chess.engine.movegen.MoveGenerator;
+import max.chess.engine.utils.notations.FENUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -21,6 +22,7 @@ public class Game {
 
     private final Board board;
 
+    public final RepetitionCounter repetitionCounter;
     public int currentPlayer = ColorUtils.WHITE;
     public boolean whiteCanCastleKingSide = true;
     public boolean whiteCanCastleQueenSide = true;
@@ -35,31 +37,74 @@ public class Game {
     public Game() {
         board = new Board(this);
         recomputeZobristKey();
-    }
-
-    public Game(Game other) {
-        this.board = new Board(this, other.board);
-        this.halfMoveClock = other.halfMoveClock;
-        this.fullMoveClock = other.fullMoveClock;
-        this.whiteCanCastleKingSide = other.whiteCanCastleKingSide;
-        this.whiteCanCastleQueenSide = other.whiteCanCastleQueenSide;
-        this.blackCanCastleKingSide = other.blackCanCastleKingSide;
-        this.blackCanCastleQueenSide = other.blackCanCastleQueenSide;
-        this.currentPlayer = other.currentPlayer;
-        this.zobristKey = other.zobristKey;
+        repetitionCounter = new RepetitionCounter(8); // 256 entries
     }
 
     public int[] getLegalMoves() {
+        return getLegalMoves(false);
+    }
+
+    // ignoreDraw is useful for perft
+    public int[] getLegalMoves(boolean ignoreDraw) {
+        if(!ignoreDraw && isADraw()) {
+            return new int[0];
+        }
         return GameCache.getOrComputeLegalMoves(this);
     }
+
+    public boolean isADraw() {
+        // TODO implement insufficient material draw
+        return isInsufficientMaterial()
+                || repetitionCounter.get(zobristKey) >= 3 // 3fold repetition
+                || halfMoveClock >= 100;  // 50-moves rule
+    }
+
+    public boolean isHardDraw() {
+        return isInsufficientMaterial()
+                || halfMoveClock >= 100;  // 50-moves rule
+    }
+
     public int getLegalMoves(int[] buffer) {
+        return getLegalMoves(buffer, false);
+    }
+
+    // ignoreDraw is useful for perft
+    public int getLegalMoves(int[] buffer, boolean ignoreDraw) {
+        if(!ignoreDraw && isADraw()) {
+            return 0;
+        }
         return MoveGenerator.generateMoves(this, buffer);
     }
+
     public int getLegalMovesCount() {
+        return getLegalMovesCount(false);
+    }
+
+    // ignoreDraw is useful for perft
+    public int getLegalMovesCount(boolean ignoreDraw) {
+        if(!ignoreDraw && isADraw()) {
+            return 0;
+        }
         return MoveGenerator.countMoves(this);
     }
 
+    public int getOpponentLegalMovesCount() {
+        return getOpponentLegalMovesCount(false);
+    }
+
+    // ignoreDraw is useful for perft
+    public int getOpponentLegalMovesCount(boolean ignoreDraw) {
+        if(!ignoreDraw && isADraw()) {
+            return 0;
+        }
+        return MoveGenerator.countMovesOpponent(this);
+    }
+
     public GameChanges playSimpleMove(Move move) {
+        if(fullMoveClock == 1) {
+            repetitionCounter.inc(zobristKey);
+        }
+
         int previousHalfMoveClock = halfMoveClock;
         boolean previousWhiteCanCastleKingSide = whiteCanCastleKingSide;
         boolean previousWhiteCanCastleQueenSide = whiteCanCastleQueenSide;
@@ -113,12 +158,15 @@ public class Game {
         }
 
         nextTurn();
-
+        repetitionCounter.inc(zobristKey);
         return new GameChanges(movePlayed, previousHalfMoveClock, previousWhiteCanCastleKingSide, previousWhiteCanCastleQueenSide,
                 previousBlackCanCastleKingSide, previousBlackCanCastleQueenSide);
     }
 
     public long playMove(int move) {
+        // save repetition epoch
+        int prevEpoch = repetitionCounter.snapshotEpoch();
+
         int previousHalfMoveClock = halfMoveClock;
         boolean previousWhiteCanCastleKingSide = whiteCanCastleKingSide;
         boolean previousWhiteCanCastleQueenSide = whiteCanCastleQueenSide;
@@ -173,11 +221,21 @@ public class Game {
 
         nextTurn();
 
+        // position after move is now current
+        repetitionCounter.inc(zobristKey);
+
+        if(BitUtils.bitCount(board.kingBB) != 2) {
+            return 0;
+        }
         return GameChanges.asBytes(movePlayed, previousHalfMoveClock, previousWhiteCanCastleKingSide, previousWhiteCanCastleQueenSide,
-                previousBlackCanCastleKingSide, previousBlackCanCastleQueenSide);
+                previousBlackCanCastleKingSide, previousBlackCanCastleQueenSide, prevEpoch);
     }
 
     public void undoMove(long gameChanges) {
+        if(BitUtils.bitCount(board.kingBB) != 2) {
+            return;
+        }
+        repetitionCounter.dec(zobristKey);
         int movePlayed = GameChanges.getMovePlayed(gameChanges);
         board.undoMove(movePlayed);
 
@@ -194,10 +252,35 @@ public class Game {
         if(ColorUtils.isBlack(currentPlayer)) {
             fullMoveClock--;
         }
+
+        // finally, restore repetition epoch from the token saved before the move
+        int prevEpoch = GameChanges.getPreviousEpoch(gameChanges);
+        repetitionCounter.restoreEpoch(prevEpoch);
+    }
+
+    public void undoNullMove(long gameChanges) {
+
+        if(BitUtils.bitCount(board.kingBB) != 2) {
+            return;
+        }
+        repetitionCounter.dec(zobristKey);
+        int movePlayed = GameChanges.getMovePlayed(gameChanges);
+        board.undoNullMove(movePlayed);
+
+        this.halfMoveClock = GameChanges.getPreviousHalfMoveClock(gameChanges);
+
+        previousTurn();
+        if(ColorUtils.isBlack(currentPlayer)) {
+            fullMoveClock--;
+        }
+
+        // finally, restore repetition epoch from the token saved before the move
+        int prevEpoch = GameChanges.getPreviousEpoch(gameChanges);
+        repetitionCounter.restoreEpoch(prevEpoch);
     }
 
     public PlayerState getPlayerState() {
-        if(isInsufficientMaterial()) {
+        if(isADraw()) {
             return PlayerState.DRAW;
         }
 
@@ -230,6 +313,7 @@ public class Game {
 
     public void setWhiteCanCastleKingSide(boolean whiteCanCastleKingSide) {
         if(this.whiteCanCastleKingSide != whiteCanCastleKingSide) {
+            repetitionCounter.resetEpoch();
             zobristKey = ZobristHashKeys.switchWhiteKingSideCastle(zobristKey);
             this.whiteCanCastleKingSide = whiteCanCastleKingSide;
         }
@@ -237,6 +321,7 @@ public class Game {
 
     public void setWhiteCanCastleQueenSide(boolean whiteCanCastleQueenSide) {
         if(this.whiteCanCastleQueenSide != whiteCanCastleQueenSide) {
+            repetitionCounter.resetEpoch();
             zobristKey = ZobristHashKeys.switchWhiteQueenSideCastle(zobristKey);
             this.whiteCanCastleQueenSide = whiteCanCastleQueenSide;
         }
@@ -244,6 +329,7 @@ public class Game {
 
     public void setBlackCanCastleKingSide(boolean blackCanCastleKingSide) {
         if(this.blackCanCastleKingSide != blackCanCastleKingSide) {
+            repetitionCounter.resetEpoch();
             zobristKey = ZobristHashKeys.switchBlackKingSideCastle(zobristKey);
             this.blackCanCastleKingSide = blackCanCastleKingSide;
         }
@@ -251,6 +337,7 @@ public class Game {
 
     public Game setBlackCanCastleQueenSide(boolean blackCanCastleQueenSide) {
         if(this.blackCanCastleQueenSide != blackCanCastleQueenSide) {
+            repetitionCounter.resetEpoch();
             zobristKey = ZobristHashKeys.switchBlackQueenSideCastle(zobristKey);
             this.blackCanCastleQueenSide = blackCanCastleQueenSide;
         }
@@ -296,6 +383,8 @@ public class Game {
         this.zobristKey = zobristKey;
     }
 
+    // Use incremental update on the hotpath
+    @Deprecated
     public void recomputeZobristKey() {
         zobristKey = ZobristHashKeys.getHashKey(this);
     }
@@ -317,5 +406,81 @@ public class Game {
     @Override
     public int hashCode() {
         return (int) zobristKey;
+    }
+
+    public long playNullMove() {
+        // save repetition epoch
+        int prevEpoch = repetitionCounter.snapshotEpoch();
+
+        int previousHalfMoveClock = halfMoveClock;
+        boolean previousWhiteCanCastleKingSide = whiteCanCastleKingSide;
+        boolean previousWhiteCanCastleQueenSide = whiteCanCastleQueenSide;
+        boolean previousBlackCanCastleKingSide = blackCanCastleKingSide;
+        boolean previousBlackCanCastleQueenSide = blackCanCastleQueenSide;
+        final int movePlayed = board.playNullMove();
+
+        if(ColorUtils.isBlack(currentPlayer)) {
+            fullMoveClock++;
+        }
+
+        halfMoveClock++;
+
+        nextTurn();
+
+        repetitionCounter.inc(zobristKey);
+
+        if(BitUtils.bitCount(board.kingBB) != 2) {
+            return 0;
+        }
+        return GameChanges.asBytes(movePlayed, previousHalfMoveClock, previousWhiteCanCastleKingSide, previousWhiteCanCastleQueenSide,
+                previousBlackCanCastleKingSide, previousBlackCanCastleQueenSide, prevEpoch);
+    }
+
+    @Override
+    public String toString() {
+        return boardAscii(this);
+    }
+
+    /** Returns an ASCII diagram of the board (ranks 8..1). */
+    public static String boardAscii(Game game) {
+        Board b = game.board();
+        StringBuilder sb = new StringBuilder(8 * (8 + 4));
+        for (int rank = 7; rank >= 0; rank--) {
+            sb.append(rank + 1).append("  ");
+            for (int file = 0; file < 8; file++) {
+                int sq = rank * 8 + file;
+                sb.append(pieceCharAt(b, sq)).append(' ');
+            }
+            sb.append('\n');
+        }
+        sb.append("\n   a b c d e f g h");
+        return sb.toString();
+    }
+    /** Returns a pretty board followed by the computed FEN on the next line. */
+    public static String boardWithFen(Game game) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(boardAscii(game)).append('\n');
+        sb.append("FEN: ").append(FENUtils.getFENFromBoard(game));
+        // Optional: include zobrist and side info
+        sb.append("\nZobrist: 0x").append(Long.toHexString(game.zobristKey()));
+        return sb.toString();
+    }
+
+    /** Returns FEN char for the piece on sq, or '.' if empty. Uppercase = white, lowercase = black. */
+    private static char pieceCharAt(Board b, int sq) {
+        int pt = b.getPieceTypeAt(sq);
+        if (pt == PieceUtils.NONE) return '.';
+        long bit = 1L << sq;
+        boolean white = (b.whiteBB & bit) != 0L;
+        char c = switch (pt) {
+            case PieceUtils.PAWN   -> 'p';
+            case PieceUtils.KNIGHT -> 'n';
+            case PieceUtils.BISHOP -> 'b';
+            case PieceUtils.ROOK   -> 'r';
+            case PieceUtils.QUEEN  -> 'q';
+            case PieceUtils.KING   -> 'k';
+            default -> '?';
+        };
+        return white ? Character.toUpperCase(c) : c;
     }
 }

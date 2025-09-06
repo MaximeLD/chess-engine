@@ -1,7 +1,8 @@
-package max.chess.engine.search;
+package max.chess.engine.search.archived;
 
 import max.chess.engine.game.Game;
 import max.chess.engine.movegen.MoveGenerator;
+import max.chess.engine.search.SearchResult;
 import max.chess.engine.search.evaluator.GameValues;
 import max.chess.engine.search.evaluator.PositionEvaluator;
 import max.chess.engine.uci.UciServer;
@@ -10,12 +11,12 @@ import max.chess.engine.utils.ColorUtils;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class NegamaxDeepeningSearch {
-    private static final int MAX_PLY = 128;
-    private static final int INF     =  30000;
+import static max.chess.engine.search.SearchConstants.MAX_MOVES;
+import static max.chess.engine.search.SearchConstants.MAX_PLY;
+import static max.chess.engine.search.SearchConstants.INF;
 
+public class NegamaxDeepeningSearch {
     // Reusable move buffers per ply to avoid allocations (still “simple”).
-    private static final int MAX_MOVES = 256;
     private static final int[][] MOVE_BUF = new int[MAX_PLY][MAX_MOVES];
 
     // Principal variation storage
@@ -28,6 +29,10 @@ public class NegamaxDeepeningSearch {
 
     static {
         MoveGenerator.warmUp();
+    }
+
+    public static void init() {
+        // To trigger static block
     }
 
     public static SearchResult pickNextMove(Game game, AtomicBoolean stopFlag, UciServer.GoParams go) {

@@ -46,6 +46,7 @@ public final class UciServer {
                     send("id name " + name);
                     send("id author " + author);
                     // If you expose options dynamically, print: send("option name X type ... default ...");
+                    send("option name StaticEvalOnly type check default false");
                     send("uciok");
                 } else if (line.equals("isready")) {
                     engine.onIsReady();
@@ -94,7 +95,7 @@ public final class UciServer {
                 StringBuilder sb = new StringBuilder();
                 i++;
                 while (i < toks.size() && !toks.get(i).equals("value")) {
-                    if (sb.length() > 0) sb.append(' ');
+                    if (!sb.isEmpty()) sb.append(' ');
                     sb.append(toks.get(i++));
                 }
                 i--; // step back one, for loop will ++
@@ -103,7 +104,7 @@ public final class UciServer {
                 StringBuilder sb = new StringBuilder();
                 i++;
                 while (i < toks.size()) {
-                    if (sb.length() > 0) sb.append(' ');
+                    if (!sb.isEmpty()) sb.append(' ');
                     sb.append(toks.get(i++));
                 }
                 i--;
@@ -165,6 +166,8 @@ public final class UciServer {
                         send("bestmove " + res.bestmove);
                 }
             } catch (Throwable t) {
+                send("string ERROR: "+t.getMessage());
+                t.printStackTrace();
                 // As a last resort, don't crash the GUI
                 send("bestmove 0000");
             }
@@ -228,6 +231,7 @@ public final class UciServer {
 
     /** Search parameters passed on "go". All values are milliseconds unless noted. */
     public static final class GoParams {
+        public boolean staticEvalOnly = false;
         public long wtime = -1, btime = -1, winc = 0, binc = 0;
         public int movestogo = -1;
         public long movetime = -1;

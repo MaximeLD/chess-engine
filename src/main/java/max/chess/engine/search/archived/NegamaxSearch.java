@@ -1,11 +1,10 @@
-package max.chess.engine.search;
+package max.chess.engine.search.archived;
 
 import max.chess.engine.game.Game;
 import max.chess.engine.movegen.MoveGenerator;
+import max.chess.engine.search.SearchResult;
 import max.chess.engine.search.evaluator.GameValues;
 import max.chess.engine.search.evaluator.PositionEvaluator;
-
-import java.util.Random;
 
 public class NegamaxSearch {
     private static final int MAX_PLY = 128;

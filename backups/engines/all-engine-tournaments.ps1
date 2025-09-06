@@ -10,9 +10,10 @@ $cutechess = Join-Path $PSScriptRoot '..\..\cutechess\cutechess-cli.exe'
 $bayes     = Join-Path $PSScriptRoot '..\..\bayeselo\bayeselo_static.exe'
 
 # --- match settings (keep simple/stable for comparisons) ---
-$tc            = '40/2'     # 40 moves / 2s; change if you like
-$gamesPerPair  = 100        # total games per pairing (cutechess will split colors with -repeat)
+$tc            = '40/3'     # 40 moves / 2s; change if you like
+$gamesPerPair  = 50        # total games per pairing (cutechess will split colors with -repeat)
 $concurrency   = 8          # parallel games (engines should run Threads=1)
+$bookPath = "$PSScriptRoot\books\openings-8ply.pgn"
 
 # --- discover engines ---
 $engineScripts = Get-ChildItem -Path $PSScriptRoot -Filter 'run-*.cmd' | Where-Object { -not $_.PSIsContainer }
@@ -52,10 +53,13 @@ for ($i = 0; $i -lt $engines.Count; $i++) {
       -engine name=$B cmd="cmd" arg="/c" arg="run-$B.cmd" dir="$PSScriptRoot" proto=uci `
       -each tc=$tc `
       -repeat `
+      -draw movenumber=50 movecount=100 score=150 `
+      -openings file="$bookPath" format=pgn order=sequential plies=8 policy=round `
       -games $gamesPerPair -concurrency $concurrency `
       -recover `
       -pgnout "$pgnPath"
         # add -debug above if you need to diagnose a pairing
+        # -resign movecount=3 score=500 `
     }
 }
 

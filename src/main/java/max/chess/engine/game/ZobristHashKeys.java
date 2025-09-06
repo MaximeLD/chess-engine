@@ -3,6 +3,7 @@ package max.chess.engine.game;
 import max.chess.engine.common.PieceType;
 import max.chess.engine.utils.ColorUtils;
 import max.chess.engine.game.board.utils.BoardUtils;
+import max.chess.engine.utils.PieceUtils;
 
 // http://hgm.nubati.net/book_format.html
 public class ZobristHashKeys {
@@ -48,8 +49,8 @@ public class ZobristHashKeys {
         return key;
     }
 
-    public static long switchPiecePresence(long key, PieceType pieceType, int color, int positionIndex) {
-        int kindOfPiece = pieceType.ordinal()*2;
+    public static long switchPiecePresence(long key, byte pieceType, int color, int positionIndex) {
+        int kindOfPiece = (pieceType - 1)*2;
         if(color == ColorUtils.WHITE) {
             kindOfPiece += 1;
         }
@@ -71,7 +72,7 @@ public class ZobristHashKeys {
             }
             PieceType pieceType = BoardUtils.getSquarePieceType(square);
             int color = BoardUtils.getSquareColor(square);
-            pieceHash = switchPiecePresence(pieceHash, pieceType, color, i);
+            pieceHash = switchPiecePresence(pieceHash, (byte) (pieceType.ordinal()+1), color, i);
         }
 
         // Encoding castling

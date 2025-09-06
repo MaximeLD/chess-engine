@@ -5,9 +5,10 @@ JDK24 - GraalVM
 
 # Currently done
 - Movegen is solid (see benchmarks) and fully working
+- Basic search implementation ; see the engine release note at the root of the project
 
 # Next steps
-- Implement search function to get the bot to play games
+- Implement all the commonly used heuristics for search
 
 # Current benchmarks
 ## Perft

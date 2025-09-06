@@ -19,20 +19,21 @@ class EvasionMoveGenerator {
         long[] lineMask = new long[64]; // for pinned sq, allowed line (between king and pinner + pinner square)
     }
     
-    static int generateEvasionMoves(Game game, int[] buffer, int kingPosition) {
-        int oppositeColor = ColorUtils.switchColor(game.currentPlayer);
+    static int generateEvasionMoves(Game game, int[] buffer, int kingPosition, int side, byte requestedPieceType) {
+        int oppositeColor = ColorUtils.switchColor(side);
         long checkersBB = MoveGenerator.getCheckersBB(kingPosition, game.board(), oppositeColor, false);
         long attackNoKingBB = MoveGenerator.doGetAttackBB(game.board(), oppositeColor, BitUtils.getPositionIndexBitMask(kingPosition));
-        int currentPlayer =  game.currentPlayer;
         boolean doubleCheck = BitUtils.bitCount(checkersBB) > 1;
 
-        boolean isWhiteTurn = ColorUtils.isWhite(currentPlayer);
+        boolean isWhiteTurn = ColorUtils.isWhite(side);
         final long usPieces = isWhiteTurn ? game.board().whiteBB : game.board().blackBB;
         final long themPieces = isWhiteTurn ? game.board().blackBB : game.board().whiteBB;
 
-        // King is always candidate
-        long kingMovesBB = King.getEvasionMovesBB(kingPosition, attackNoKingBB, usPieces);
-        MoveGenerator.addMovesFromBitboard(PieceUtils.KING, kingPosition, kingMovesBB, false, false, game, buffer);
+        if(requestedPieceType == PieceUtils.ALL || requestedPieceType == PieceUtils.KING) {
+            // King is always candidate
+            long kingMovesBB = King.getEvasionMovesBB(kingPosition, attackNoKingBB, usPieces);
+            MoveGenerator.addMovesFromBitboard(PieceUtils.KING, kingPosition, kingMovesBB, false, false, game, buffer);
+        }
 
         if(doubleCheck) {
             // Only king moves are possible
@@ -58,59 +59,80 @@ class EvasionMoveGenerator {
         final long usBishops = game.board().bishopBB & usPieces;
         final long usQueens = game.board().queenBB & usPieces;
         final long usRooks = game.board().rookBB & usPieces;
-        // Handle en-passant evasion when checker is a pawn
-        if (game.board().enPassantIndex >= 0 && ((themPawns & singleCheckerBB) != 0)) {
-            genEpEvasionIfLegal(game.currentPlayer, kingPosition, usPawns, themPawns, themKnights, themBishops | themQueens,
-                    themRooks | themQueens, themKing, game.board().enPassantIndex, game.board().gameBB, buffer, game);
+
+        if(requestedPieceType == PieceUtils.ALL || requestedPieceType == PieceUtils.PAWN) {
+            // Handle en-passant evasion when checker is a pawn
+            if (game.board().enPassantIndex >= 0 && ((themPawns & singleCheckerBB) != 0)) {
+                genEpEvasionIfLegal(side, kingPosition, usPawns, themPawns, themKnights, themBishops | themQueens,
+                        themRooks | themQueens, themKing, game.board().enPassantIndex, game.board().gameBB, buffer, game);
+            }
         }
 
         // 4) generate piece moves onto evasionTargets, respecting pins
         final PinInfo pin = computePins(kingPosition, usPieces, themPieces, themBishops, themRooks, themQueens);
 
-        // Knights (cannot move if pinned)
-        long knights = usKnights & ~pin.pinned;
-        while (knights != 0) {
-            int from = BitUtils.bitScanForward(knights); knights &= knights - 1;
-            long moves = Knight.getLegalMovesBB(from, usPawns) & evasionTargets;
-            MoveGenerator.addMovesFromBitboard(PieceUtils.KNIGHT, from, moves, false, false, game, buffer);
+        if(requestedPieceType == PieceUtils.ALL || requestedPieceType == PieceUtils.KNIGHT) {
+            // Knights (cannot move if pinned)
+            long knights = usKnights & ~pin.pinned;
+            while (knights != 0) {
+                int from = BitUtils.bitScanForward(knights);
+                knights &= knights - 1;
+                long moves = Knight.getLegalMovesBB(from, usPawns) & evasionTargets;
+                MoveGenerator.addMovesFromBitboard(PieceUtils.KNIGHT, from, moves, false, false, game, buffer);
+            }
         }
 
-        // Bishops and Queens on diagonals
-        long bishops = usBishops;
-        while (bishops != 0) {
-            int from = BitUtils.bitScanForward(bishops); bishops &= bishops - 1;
-            long legalMask = pinMaskFor(from, pin); // either all-ones or a single ray line
-            long moves = Bishop.getAttackBB(from, game.board().gameBB) & evasionTargets & legalMask & ~usPieces;
-            MoveGenerator.addMovesFromBitboard(PieceUtils.BISHOP, from, moves, false, false, game, buffer);
+        if(requestedPieceType == PieceUtils.ALL || requestedPieceType == PieceUtils.BISHOP) {
+            // Bishops and Queens on diagonals
+            long bishops = usBishops;
+            while (bishops != 0) {
+                int from = BitUtils.bitScanForward(bishops);
+                bishops &= bishops - 1;
+                long legalMask = pinMaskFor(from, pin); // either all-ones or a single ray line
+                long moves = Bishop.getAttackBB(from, game.board().gameBB) & evasionTargets & legalMask & ~usPieces;
+                MoveGenerator.addMovesFromBitboard(PieceUtils.BISHOP, from, moves, false, false, game, buffer);
+            }
         }
-        long queenBishops = usQueens;
-        while (queenBishops != 0) {
-            int from = BitUtils.bitScanForward(queenBishops); queenBishops &= queenBishops - 1;
-            long legalMask = pinMaskFor(from, pin); // either all-ones or a single ray line
-            long moves = Bishop.getAttackBB(from, game.board().gameBB) & evasionTargets & legalMask & ~usPieces;
-            MoveGenerator.addMovesFromBitboard(PieceUtils.QUEEN, from, moves, false, false, game, buffer);
+
+        if(requestedPieceType == PieceUtils.ALL || requestedPieceType == PieceUtils.QUEEN) {
+            long queenBishops = usQueens;
+            while (queenBishops != 0) {
+                int from = BitUtils.bitScanForward(queenBishops);
+                queenBishops &= queenBishops - 1;
+                long legalMask = pinMaskFor(from, pin); // either all-ones or a single ray line
+                long moves = Bishop.getAttackBB(from, game.board().gameBB) & evasionTargets & legalMask & ~usPieces;
+                MoveGenerator.addMovesFromBitboard(PieceUtils.QUEEN, from, moves, false, false, game, buffer);
+            }
         }
 
         // Rooks and Queens on ranks/files
-        long rooks = (usRooks);
-        while (rooks != 0) {
-            int from = BitUtils.bitScanForward(rooks); rooks &= rooks - 1;
-            long legalMask = pinMaskFor(from, pin);
-            long moves = Rook.getAttackBB(from, game.board().gameBB) & evasionTargets & legalMask & ~usPieces;
-            MoveGenerator.addMovesFromBitboard(PieceUtils.ROOK, from, moves, false, false, game, buffer);
-        }
-        long queenRooks = (usQueens);
-        while (queenRooks != 0) {
-            int from = BitUtils.bitScanForward(queenRooks); queenRooks &= queenRooks - 1;
-            long legalMask = pinMaskFor(from, pin);
-            long moves = Rook.getAttackBB(from, game.board().gameBB) & evasionTargets & legalMask & ~usPieces;
-            MoveGenerator.addMovesFromBitboard(PieceUtils.QUEEN, from, moves, false, false, game, buffer);
+        if(requestedPieceType == PieceUtils.ALL || requestedPieceType == PieceUtils.ROOK) {
+            long rooks = (usRooks);
+            while (rooks != 0) {
+                int from = BitUtils.bitScanForward(rooks);
+                rooks &= rooks - 1;
+                long legalMask = pinMaskFor(from, pin);
+                long moves = Rook.getAttackBB(from, game.board().gameBB) & evasionTargets & legalMask & ~usPieces;
+                MoveGenerator.addMovesFromBitboard(PieceUtils.ROOK, from, moves, false, false, game, buffer);
+            }
         }
 
-        // Pawns: captures to checker, pushes to block squares, promos included
-        genPawnEvasions(game.currentPlayer, usPawns, usPieces, themPieces, game.board().gameBB,
-                evasionTargets, pin, buffer, game);
+        if(requestedPieceType == PieceUtils.ALL || requestedPieceType == PieceUtils.QUEEN) {
+            long queenRooks = (usQueens);
+            while (queenRooks != 0) {
+                int from = BitUtils.bitScanForward(queenRooks);
+                queenRooks &= queenRooks - 1;
+                long legalMask = pinMaskFor(from, pin);
+                long moves = Rook.getAttackBB(from, game.board().gameBB) & evasionTargets & legalMask & ~usPieces;
+                MoveGenerator.addMovesFromBitboard(PieceUtils.QUEEN, from, moves, false, false, game, buffer);
+            }
+        }
 
+        if(requestedPieceType == PieceUtils.ALL || requestedPieceType == PieceUtils.PAWN) {
+            // Pawns: captures to checker, pushes to block squares, promos included
+            genPawnEvasions(side, usPawns, usPieces, themPieces, game.board().gameBB,
+                    evasionTargets, pin, buffer, game);
+        }
 
         return MoveGenerator.currentNumberOfMoves;
     }

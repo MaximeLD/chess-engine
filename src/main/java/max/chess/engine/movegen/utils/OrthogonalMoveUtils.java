@@ -18,6 +18,8 @@ public final class OrthogonalMoveUtils {
     public static final long G1_G8 = generateVertical(6);
     public static final long H1_H8 = generateVertical(7);
 
+    public static final long[] FILES = {A1_A8, B1_B8, C1_C8, D1_D8, E1_E8,  F1_F8, G1_G8, H1_H8};
+    public static final long[] RANKS = {A1_H1, A2_H2, A3_H3,  A4_H4, A5_H5, A6_H6, A7_H7, A8_H8};
 
     // 64 elements, each element is a bitboard where 1 are representing the valid orthogonals of this square
     public static final long[] orthogonals = {

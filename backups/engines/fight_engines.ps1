@@ -16,33 +16,42 @@ if($candidate -eq $baseline)
 $cutechess="$PSScriptRoot\..\..\cutechess\cutechess-cli.exe"
 $bayes = "$PSScriptRoot\..\..\bayeselo\bayeselo_static.exe"
 
+$epochSeconds = [Math]::Round((Get-Date).ToFileTime() / 10000000 - 11644473600)
+
 $outputFolder = "$PSScriptRoot\results\$baseline\$candidate"
+$bookPath = "$PSScriptRoot\books\openings-8ply.pgn"
+$outputPgn = "$outputFolder\match-$epochSeconds.pgn"
 
 md $outputFolder -ea 0
 
 & "$cutechess" `
   -engine name=$baseline cmd="cmd" arg="/c" arg="run-$baseline.cmd" dir="$PSScriptRoot" proto=uci `
   -engine name=$candidateName cmd="cmd" arg="/c" arg="run-$candidate.cmd" dir="$PSScriptRoot" proto=uci `
-  -each tc=40/4 `
+  -each st=0.1 timemargin=150 `
+  -openings file="$bookPath" format=pgn order=sequential plies=8 policy=round `
+  -srand 123456 `
   -repeat `
-  -games 500 -concurrency 8 `
+  -games 50 -concurrency 4 `
   -recover `
-  -pgnout "$outputFolder\match.pgn"
-#  -debug
+  -ratinginterval 10 `
+  -outcomeinterval 10 `
+  -pgnout "$outputPgn"
+
+#  -resign movecount=3 score=500 `
+#  -draw movenumber=50 movecount=100 score=150 `
 
 # Paths
-$pgn        = Join-Path $outputFolder 'match.pgn'
 $stdinFile  = Join-Path $outputFolder 'bayeselo.in'
-$stdoutFile = Join-Path $outputFolder 'bayeselo.txt'
+$stdoutFile = Join-Path $outputFolder "bayeselo-$epochSeconds.txt"
 $stderrFile = Join-Path $outputFolder 'bayeselo.err.txt'
 
 if (-not (Test-Path $bayes)) { Write-Error "BayesElo not found: $bayes" }
-if (-not (Test-Path $pgn))     { Write-Error "PGN not found: $pgn" }
+if (-not (Test-Path $outputPgn))     { Write-Error "PGN not found: $outputPgn" }
 $null = New-Item -ItemType Directory -Path $outputFolder -Force
 
 # Prepare BayesElo commands
 @"
-readpgn $pgn
+readpgn $outputPgn
 elo
 mm
 ratings
@@ -85,7 +94,7 @@ if ($map.ContainsKey($Baseline) -and $map.ContainsKey($candidateName)) {
 }
 
 # set your path
-$file = "$outputFolder\bayeselo.txt"
+$file = "$stdoutFile"
 
 $started = $false
 $trimmed = @()

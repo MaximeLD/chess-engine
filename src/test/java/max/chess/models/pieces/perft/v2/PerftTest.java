@@ -76,7 +76,7 @@ public class PerftTest {
         long nodeResult = 0;
 
         if(COMPARE_TO_STOCKFISH && depth == 1 && PERFT_DEPTH != 1) {
-            return game.getLegalMovesCount();
+            return game.getLegalMovesCount(true);
         }
 
         if(depth == 0) {
@@ -86,7 +86,7 @@ public class PerftTest {
         for(int currentDepth = DEBUG_MODE ? 1 : 1 ; currentDepth <= depth ; currentDepth++) {
             nodeResult = 0;
             int[] moves = MOVE_BUF[ply];
-            int n = COUNT[ply] = game.getLegalMoves(moves);  // fills buf[0..n)
+            int n = COUNT[ply] = game.getLegalMoves(moves, true);  // fills buf[0..n)
 //            perftResult = new PerftResult();
 //            perftResult = perftResult.add(fromMoveSet(moves));
             for (int i = 0 ; i < n; i++) {

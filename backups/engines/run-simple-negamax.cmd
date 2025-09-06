@@ -1,1 +1,0 @@
-C:\Users\maxim\.jdks\graalvm-jdk-24.0.2\bin\java.exe -jar simple-negamax-1.0-SNAPSHOT-20250901-172810.jar

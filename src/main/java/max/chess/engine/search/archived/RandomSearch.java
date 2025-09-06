@@ -1,4 +1,4 @@
-package max.chess.engine.search;
+package max.chess.engine.search.archived;
 
 import max.chess.engine.game.Game;
 import max.chess.engine.movegen.MoveGenerator;
