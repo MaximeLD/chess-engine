@@ -31,6 +31,28 @@ public final class SearchFacade {
         final long budgetNs = TimeControl.computeBudgetNs(ColorUtils.isWhite(game.currentPlayer), go, go.depth, ctx.cfg);
         SearchResult sr = IterativeDeepening.run(game, ctx, stop, budgetNs, go.depth, out);
         out.accept(PawnEval.PAWN_HASH.toUCIInfo());
+
+        if (ctx.cfg.debug) {
+            // Verify bestMove legality in the current position
+            int mv = sr.move();
+            if (mv != 0) {
+                int[] buf = ctx.moveBuf[0];
+                int n = game.getLegalMoves(buf);
+                boolean legal = false;
+                for (int i = 0; i < n; i++) {
+                    if (buf[i] == mv) { legal = true; break; }
+                }
+                if (!legal) {
+                    throw new IllegalStateException("Illegal bestMove [CE-v7.3-P002]: " + mv);
+                }
+                // PV head must match bestMove when present
+                int[] pv = sr.principalVariation();
+                if (pv != null && pv.length > 0 && pv[0] != mv) {
+                    throw new IllegalStateException("BestMove/PV mismatch [CE-v7.3-P002]: " + mv + " vs " + pv[0]);
+                }
+            }
+        }
+
         return sr;
     }
 }
