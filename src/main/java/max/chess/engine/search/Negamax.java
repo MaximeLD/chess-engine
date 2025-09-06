@@ -319,6 +319,56 @@ final class Negamax {
             int hist    = ctx.history[side][from][to];
             boolean isCapture = !MoveOrdering.isQuiet(game, mv);
             final boolean isQuiet     = !isCapture;
+
+            // LMP/HP v2: conservative pruning of late quiets only in the safest situations.
+            if (!isPV && !game.inCheck() && isQuiet) {
+                // Never prune structural/king-safety moves
+                boolean isCastle = Move.isCastleKingSide(mv) || Move.isCastleQueenSide(mv);
+                // Pawn pushes can be very important; don't prune them
+                final var b = game.board();
+                boolean isPawnPush = (((b.pawnBB) & (ColorUtils.isWhite(game.currentPlayer) ? b.whiteBB : b.blackBB))
+                    & (1L << from)) != 0L;
+                boolean givesCheck = MoveOrdering.givesCheckFast(game, mv);
+
+                if (!givesCheck && !isCastle && !isPawnPush) {
+                    int quietIndex = Math.max(0, i - capCount);
+
+                    // Additional safety: only when static eval is clearly below alpha (like soft futility)
+                    // Use a small guard to avoid pruning when position is borderline.
+                    boolean staticBad = (standPat + 50) <= alpha;
+
+                    // LMP: depth <= 2, very late quiets only, and no king-danger
+                    if (ctx.cfg.useLMP && depth <= Math.min(ctx.cfg.lmpMaxDepth, 2)
+                        && staticBad && !(ctx.cfg.lmpBlockOnDanger && highDanger)) {
+                        int threshold = Math.max(0, ctx.cfg.lmpBaseQuiets + depth * ctx.cfg.lmpScale);
+                        // Push threshold further back so we don't starve the search
+                        threshold += 2; // extra cushion
+                        if (quietIndex >= threshold) {
+                            continue;
+                        }
+                    }
+
+                    // History pruning: off by default; if enabled, require both poor main history AND poor continuation
+                    if (ctx.cfg.useHistoryPruning && depth <= Math.min(ctx.cfg.histPruneMaxDepth, 2)
+                        && staticBad && !(ctx.cfg.histPruneBlockOnDanger && highDanger)) {
+                        int prevTo = (prev == 0) ? 0 : (Move.getEndPosition(prev) & 63);
+                        int cont = ctx.contHistory[side][prevTo][to];
+                        // killers/TT immunity
+                        int kp = (ply < ctx.killer.length) ? ply : (ctx.killer.length - 1);
+                        boolean isKiller = (mv == ctx.killer[kp][0]) || (mv == ctx.killer[kp][1]);
+                        boolean isTT = (ctx.tt != null && hit != null && hit.move == mv);
+
+                        if (!isKiller && !isTT) {
+                            // Start very late and require BOTH histories to be non-positive
+                            int startAfter = Math.max(ctx.cfg.histPruneAfter, 8);
+                            if (quietIndex >= startAfter && hist <= 0 && cont <= 0) {
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+
             boolean givesCheck = MoveOrdering.givesCheckFast(game, mv);
 
             // Segment-aware move index (quiets start at 0 after captures)
