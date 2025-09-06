@@ -4,14 +4,23 @@ This repository uses chat-delivered patches tracked here. Each patch is identifi
 
 ## Index
 
-| ID           | Title                                          | Date (Europe/Paris) | Status    | Affected                     |
-|--------------|-------------------------------------------------|---------------------|-----------|------------------------------|
-| CE-v7.3-P001 | Introduce PATCHES.md and .editorconfig         | 2025-09-06          | APPLIED   | PATCHES.md, .editorconfig    |
-| CE-v7.3-P002 | Root PV/bestMove sanity checks (debug-only)    | 2025-09-06          | PROPOSED  | SearchFacade.java            |
-| CE-v8.0-P003 | LMP + History Pruning (non-PV, shallow)        | 2025-09-06          | PROPOSED  | SearchConfig.java, Negamax.java |
-| CE-v8.0-P004 | Soften LMP; disable HP by default; safety gates| 2025-09-06          | PROPOSED  | SearchConfig.java (defaults), Negamax.java |
+| ID           | Title                                           | Date (Europe/Paris) | Status   | Affected                                   |
+|--------------|-------------------------------------------------|---------------------|----------|--------------------------------------------|
+| CE-v9.0-P001 | Razoring at shallow depth (d≤2)                 | 2025-09-06          | PROPOSED | Negamax.java                               |
+| CE-v8.0-P004 | Soften LMP; disable HP by default; safety gates | 2025-09-06          | PROPOSED | SearchConfig.java (defaults), Negamax.java |
+| CE-v8.0-P003 | LMP + History Pruning (non-PV, shallow)         | 2025-09-06          | PROPOSED | SearchConfig.java, Negamax.java            |
+| CE-v7.3-P002 | Root PV/bestMove sanity checks (debug-only)     | 2025-09-06          | PROPOSED | SearchFacade.java                          |
+| CE-v7.3-P001 | Introduce PATCHES.md and .editorconfig          | 2025-09-06          | APPLIED  | PATCHES.md, .editorconfig                  |
 
 ---
+
+## CE-v9.0-P001
+- **Title:** Razoring at shallow depth (d≤2)
+- **Rationale:** Fast fail-low at depth 1–2 when static eval is well below α. Confirm with qsearch to avoid tactical misses.
+- **Risk:** Low. Guarded by mate margin, no-check, and king-danger.
+- **How to test:** Same opening set + TC. Expect speedup; no tactical regressions on standard suites.
+- **Dependencies:** None.
+- **Notes:** Margins (150/300) are conservative and can be tuned later.
 
 ## CE-v8.0-P004
 - **Title:** Soften LMP; disable HP by default; safety gates
