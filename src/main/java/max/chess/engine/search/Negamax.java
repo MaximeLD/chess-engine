@@ -83,6 +83,25 @@ final class Negamax {
             }
         }
 
+        // Razoring (shallow fail-low shortcut): non-PV, not in check, d <= 2.
+        // If static eval is far below alpha, confirm with qsearch and return early.
+        if (!isPV && !game.inCheck() && depth <= 2) {
+            int mateGuard = max.chess.engine.search.evaluator.GameValues.CHECKMATE_VALUE - 200;
+            if (Math.abs(alpha) < mateGuard && Math.abs(beta) < mateGuard) {
+                // Conservative margins; tune later if needed.
+                final int razorMargin = (depth == 1 ? 150 : 300);
+                // In high king danger, skip razoring to avoid cutting defensive resources.
+                boolean danger = max.chess.engine.search.KingSafety.quickDanger(game);
+                if (!danger && standPat + razorMargin <= alpha) {
+                    int qs = Quiescence.search(game, ctx, alpha, beta, ply, stop, start, budgetNs);
+                    if (qs <= alpha) {
+                        if (ply < ctx.pvLen.length) ctx.pvLen[ply] = 0;
+                        return qs;
+                    }
+                }
+            }
+        }
+
         // -----------------------------
         // Null-move pruning (conservative)
         // -----------------------------
