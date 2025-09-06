@@ -248,22 +248,6 @@ final class Negamax {
             }
         }
 
-//        // Validate candidate against the legal set before trusting/gating (safe hoist)
-//        if (candidate != 0) {
-//            int idx = -1; for (int i = 0; i < moveCount; i++) { if (moves[i] == candidate) { idx = i; break; } }
-//            if (idx >= 0) {
-//                boolean tactical = MoveOrdering.isTactical(game, candidate);
-//                int segmentStart = tactical ? 0 : capCount;                 // captures in [0..capCount)
-//                if (segmentStart >= moveCount) segmentStart = 0;            // no quiet tail -> place at 0
-//                if (idx != segmentStart) {
-//                    int tmp = moves[segmentStart]; moves[segmentStart] = moves[idx]; moves[idx] = tmp;
-//                }
-//                trustedTTMove = candidate; haveTrustedTT = true;
-//            } else {
-//                haveTrustedTT = false;
-//            }
-//        }
-
         // Previous move leading to THIS node
         final int prev = (ply < ctx.prevMove.length) ? ctx.prevMove[ply] : 0;
 
@@ -303,6 +287,11 @@ final class Negamax {
 
         for (int i = 0; i < moveCount; i++) {
             int mv = moves[i];
+
+            // Singular verification: exclude only at this ply
+            if (ply < ctx.svExcludeAtPly.length && ctx.svExcludeAtPly[ply] == mv) {
+                continue;
+            }
 
             // Futility pruning of quiets at shallow depth (non-PV, not in check, not checking move)
             // Only prune LATE quiet moves so you don't decapitate the good ones.
@@ -389,6 +378,50 @@ final class Negamax {
             }
 
             boolean givesCheck = MoveOrdering.givesCheckFast(game, mv);
+
+            // Precompute optional singular extension for the PV TT move
+            int seExt = 0;
+            if (ctx.cfg.useSingularExtension
+                && isPV
+                && !game.inCheck()
+                && depth >= ctx.cfg.seMinDepth
+                && mv == trustedTTMove
+                && hit != null
+                && hit.move == mv
+                && hit.flag == TranspositionTable.TT_EXACT
+                && hit.depth >= depth - 1
+                && hit.score > alpha && hit.score < beta       // PV window at this node
+                && moveCount >= 2
+                && !highDanger) {                              // reuse existing danger gate
+
+                // Only extend quiet, non-check TT move
+                final boolean ttIsQuiet = MoveOrdering.isQuiet(game, mv);
+                final boolean ttGivesCheck = givesCheck;       // computed just above
+                if (ttIsQuiet && !ttGivesCheck) {
+                    final int mateGuard = max.chess.engine.search.evaluator.GameValues.CHECKMATE_VALUE - 256;
+                    if (Math.abs(hit.score) < mateGuard) {
+                        final int margin   = Math.max(64, depth * ctx.cfg.seMarginPerDepth); // FIXED: comma, not "..."
+                        final int singBeta = hit.score - margin;
+                        final int verDepth = depth - 1 - ctx.cfg.seVerifyReduction;
+
+                        if (verDepth >= 1) {
+                            ctx.seTried++;
+                            // Exclude TT move only at this ply for the verification search
+                            final int saved = (ply < ctx.svExcludeAtPly.length) ? ctx.svExcludeAtPly[ply] : 0;
+                            if (ply < ctx.svExcludeAtPly.length) ctx.svExcludeAtPly[ply] = mv;
+                            int verify = search(game, ctx, verDepth, ply, singBeta - 1, singBeta,
+                                stop, start, budgetNs, inNullMove, /*isPV*/false);
+                            if (ply < ctx.svExcludeAtPly.length) ctx.svExcludeAtPly[ply] = saved;
+
+                            if (verify < singBeta) {
+                                seExt = 1;
+                                ctx.seExtended++;
+                            }
+                        }
+                    }
+                }
+            }
+
 
             // Segment-aware move index (quiets start at 0 after captures)
             int R = 0;
@@ -523,16 +556,17 @@ final class Negamax {
             // --- end repetition handling ---
 
             if (i == 0) {
-                // PV move: do not reduce (common practice)
-                score = -search(game, ctx, depth - 1, ply + 1, -beta, -alpha, stop, start, budgetNs, false, /*isPV=*/isPV);
+                // PV move: allow +1 ply singular extension when verified
+                int childDepth = depth - 1 + seExt;
+                score = -search(game, ctx, childDepth, ply + 1, -beta, -alpha, stop, start, budgetNs, false, /*isPV=*/isPV);
             } else {
                 if (R > 0) {
-                    // Reduced null-window search
+                    // Reduced null-window search (no SE on non-PV path)
                     ctx.lmrResearched++;
-                    score = -search(game, ctx, depth - 1 - R, ply + 1, -(alpha + 1), -alpha, stop, start, budgetNs, false, /*isPV=*/false);
+                    score = -search(game, ctx, depth - 1 - R, ply + 1, -alpha - 1, -alpha, stop, start, budgetNs, false, /*isPV=*/false);
                     if (score > alpha) {
                         // Re-search at full depth, still null-window
-                        score = -search(game, ctx, depth - 1, ply + 1, -(alpha + 1), -alpha, stop, start, budgetNs, false, /*isPV=*/false);
+                        score = -search(game, ctx, depth - 1, ply + 1, -alpha - 1, -alpha, stop, start, budgetNs, false, /*isPV=*/false);
                         if (score > alpha && score < beta) {
                             // Only then widen window
                             ctx.lmrWidened++;
@@ -540,8 +574,8 @@ final class Negamax {
                         }
                     }
                 } else {
-                    // No LMR: standard PVS sequence
-                    score = -search(game, ctx, depth - 1, ply + 1, -(alpha + 1), -alpha, stop, start, budgetNs, false, /*isPV=*/false);
+                    // No LMR: standard PVS sequence (no SE)
+                    score = -search(game, ctx, depth - 1, ply + 1, -alpha - 1, -alpha, stop, start, budgetNs, false, /*isPV=*/false);
                     if (score > alpha && score < beta) {
                         score = -search(game, ctx, depth - 1, ply + 1, -beta, -alpha, stop, start, budgetNs, false, /*isPV=*/isPV);
                     }

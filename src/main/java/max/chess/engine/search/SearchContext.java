@@ -39,6 +39,14 @@ public final class SearchContext {
     public long iidTried, iidUsed;
     public long probCutTried, probCutCut;
 
+    // Singular Extension diagnostics
+    public long seTried, seExtended;
+
+    // Singular verification: exclude TT move only at the verification node's ply
+    // svExcludeAtPly[ply] == 0 means "no exclusion at this ply"
+    public final int[] svExcludeAtPly = new int[SearchConstants.STACK_PLY];
+
+
     // TT
     public final TranspositionTable tt; // nullable if disabled
 
@@ -64,6 +72,11 @@ public final class SearchContext {
         for (int f = 0; f < 64; f++) java.util.Arrays.fill(countermove[f], 0);
         for (int s = 0; s < 2; s++) for (int t = 0; t < 64; t++) java.util.Arrays.fill(contHistory[s][t], 0);
         java.util.Arrays.fill(prevMove, 0);
+
+        // Reset singular verification state
+        java.util.Arrays.fill(svExcludeAtPly, 0);
+        seTried = seExtended = 0;
+
         if (tt != null) { tt.newSearch(); tt.resetCounters(); }
         PawnEval.newSearch();
     }

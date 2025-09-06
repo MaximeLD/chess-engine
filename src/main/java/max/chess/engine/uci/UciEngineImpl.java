@@ -5,7 +5,6 @@ import max.chess.engine.game.board.utils.BoardGenerator;
 import max.chess.engine.movegen.Move;
 import max.chess.engine.search.SearchConfig;
 import max.chess.engine.search.SearchFacade;
-import max.chess.engine.search.archived.NegamaxDeepeningSearchWithTTAndQuiescenceSEEDelta;
 import max.chess.engine.search.SearchResult;
 import max.chess.engine.utils.notations.FENUtils;
 import max.chess.engine.utils.notations.MoveIOUtils;
