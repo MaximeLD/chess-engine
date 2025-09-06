@@ -1,4 +1,8 @@
-Clean engine:
+# V8
+- Move pruning:
+  - Move Count Pruning (LMP) for late quiets at shallow depth.
+  - History Pruning (HP) for very low-history quiets late in the move list.
+    Non-PV, not in check, non-checking quiets only. Killers/TT immune. Danger-aware.
 
 # V7.4
 Search hygiene & anti-draw behavior

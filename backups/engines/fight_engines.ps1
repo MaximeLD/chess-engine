@@ -31,7 +31,7 @@ md $outputFolder -ea 0
   -openings file="$bookPath" format=pgn order=sequential plies=8 policy=round `
   -srand 123456 `
   -repeat `
-  -games 50 -concurrency 4 `
+  -games 50 -concurrency 8 `
   -recover `
   -ratinginterval 10 `
   -outcomeinterval 10 `

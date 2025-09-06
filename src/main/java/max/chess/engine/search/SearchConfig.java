@@ -53,6 +53,19 @@ public final class SearchConfig {
     public final int reverseFutilityMargin; // for RFP at depth <= 3
     public final boolean tightenFutilityOnDanger; // default true
 
+    // Move Count Pruning (LMP) and History Pruning (HP)
+    public final boolean useLMP;
+    public final int  lmpMaxDepth;        // prune only when depth <= this (e.g., 3)
+    public final int  lmpBaseQuiets;      // baseline late-quiet index (e.g., 4)
+    public final int  lmpScale;           // threshold = lmpBaseQuiets + depth*lmpScale (e.g., 2)
+    public final boolean lmpBlockOnDanger; // disable LMP when king danger flagged
+
+    public final boolean useHistoryPruning;
+    public final int  histPruneMaxDepth;     // prune only when depth <= this (e.g., 3)
+    public final int  histPruneAfter;        // start considering from this quiet index (e.g., 6)
+    public final int  histPruneThreshold;    // history <= threshold -> eligible (e.g., 1000)
+    public final boolean histPruneBlockOnDanger;
+
     // Internal Iterative Deepening
     public final boolean useIID;
     public final int iidMinDepth;        // e.g., 5
@@ -139,6 +152,19 @@ public final class SearchConfig {
         reverseFutilityMargin = b.reverseFutilityMargin;
         tightenFutilityOnDanger = b.tightenFutilityOnDanger;
 
+        // LMP/HP
+        useLMP = b.useLMP;
+        lmpMaxDepth = b.lmpMaxDepth;
+        lmpBaseQuiets = b.lmpBaseQuiets;
+        lmpScale = b.lmpScale;
+        lmpBlockOnDanger = b.lmpBlockOnDanger;
+
+        useHistoryPruning = b.useHistoryPruning;
+        histPruneMaxDepth = b.histPruneMaxDepth;
+        histPruneAfter = b.histPruneAfter;
+        histPruneThreshold = b.histPruneThreshold;
+        histPruneBlockOnDanger = b.histPruneBlockOnDanger;
+
         useIID = b.useIID;
         iidMinDepth = b.iidMinDepth;
         iidReduction = b.iidReduction;
@@ -212,6 +238,19 @@ public final class SearchConfig {
         private int futilityMargin3 = 300;  // d=3
         private int reverseFutilityMargin = 100;
         private boolean tightenFutilityOnDanger = true;
+
+        // LMP/HP defaults (conservative)
+        private boolean useLMP = true;
+        private int  lmpMaxDepth = 2;   // only d <= 2
+        private int  lmpBaseQuiets = 8; // prune very late quiets
+        private int  lmpScale = 1;      // gentler scaling
+        private boolean lmpBlockOnDanger = true;
+
+        private boolean useHistoryPruning = true;
+        private int  histPruneMaxDepth = 3;
+        private int  histPruneAfter = 6;
+        private int  histPruneThreshold = 1000; // history score <= threshold -> prune
+        private boolean histPruneBlockOnDanger = true;
 
         // IID defaults (conservative)
         private boolean useIID = true;
@@ -294,6 +333,19 @@ public final class SearchConfig {
         public Builder futilityMargin2(int v){futilityMargin2=v;return this;}
         public Builder futilityMargin3(int v){futilityMargin3=v;return this;}
         public Builder reverseFutilityMargin(int v){reverseFutilityMargin=v;return this;}
+
+        // LMP/HP setters
+        public Builder useLMP(boolean v){useLMP=v;return this;}
+        public Builder lmpMaxDepth(int v){lmpMaxDepth=v;return this;}
+        public Builder lmpBaseQuiets(int v){lmpBaseQuiets=v;return this;}
+        public Builder lmpScale(int v){lmpScale=v;return this;}
+        public Builder lmpBlockOnDanger(boolean v){lmpBlockOnDanger=v;return this;}
+
+        public Builder useHistoryPruning(boolean v){useHistoryPruning=v;return this;}
+        public Builder histPruneMaxDepth(int v){histPruneMaxDepth=v;return this;}
+        public Builder histPruneAfter(int v){histPruneAfter=v;return this;}
+        public Builder histPruneThreshold(int v){histPruneThreshold=v;return this;}
+        public Builder histPruneBlockOnDanger(boolean v){histPruneBlockOnDanger=v;return this;}
 
         public Builder useIID(boolean v){useIID=v;return this;}
         public Builder iidMinDepth(int v){iidMinDepth=v;return this;}
