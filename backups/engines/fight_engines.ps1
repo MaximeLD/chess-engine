@@ -27,7 +27,7 @@ md $outputFolder -ea 0
 & "$cutechess" `
   -engine name=$baseline cmd="cmd" arg="/c" arg="run-$baseline.cmd" dir="$PSScriptRoot" proto=uci `
   -engine name=$candidateName cmd="cmd" arg="/c" arg="run-$candidate.cmd" dir="$PSScriptRoot" proto=uci `
-  -each st=0.1 timemargin=150 `
+  -each st=0.075 timemargin=150 `
   -openings file="$bookPath" format=pgn order=sequential plies=8 policy=round `
   -srand 123456 `
   -repeat `
