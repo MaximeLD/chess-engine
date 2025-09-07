@@ -16,7 +16,9 @@ import max.chess.engine.utils.PieceUtils;
 import static max.chess.engine.search.evaluator.PieceValues.*;
 
 public class PositionEvaluator {
-    // Put these in PositionEvaluator (or a small EvalTables class).
+    public static final long LIGHT_SQUARES = 0xAA55AA55AA55AA55L;
+    public static final long CENTER_16     = 0x00003C3C3C3C0000L;
+
     private static final long[] KING_RING       = new long[64];
     private static final long[] RING_DIAG_RAYS  = new long[64]; // optional prune
     private static final long[] RING_ORTHO_RAYS = new long[64]; // optional prune
@@ -139,7 +141,48 @@ public class PositionEvaluator {
 
         int pawnsScore = PawnEval.evalPawnStructureWithHash(game.board(), gameProgress256);
 
-        return playerScore - opponentScore + pawnsScore;
+        // V11 extras (phase-blended inside each helper)
+        int rookShape       = rookFileAnd7thScore(sideBB,          game.board(), isWhiteTurn,  gameProgress256);
+        int knOutposts      = knightOutpostScore(sideBB,           game.board(), isWhiteTurn,  gameProgress256);
+        int passerExtras    = passedPawnExtrasScore(sideBB,        game.board(), isWhiteTurn,  gameProgress256);
+
+        int oppRookShape    = rookFileAnd7thScore(oppositeSideBB,  game.board(), !isWhiteTurn, gameProgress256);
+        int oppKnOutposts   = knightOutpostScore(oppositeSideBB,   game.board(), !isWhiteTurn, gameProgress256);
+        int oppPasserExtras = passedPawnExtrasScore(oppositeSideBB,game.board(), !isWhiteTurn, gameProgress256);
+
+        // Batch B additions
+        int bishopQuality   = bishopQualityScore(sideBB,           game.board(), isWhiteTurn,  gameProgress256);
+        int diagPoke        = longDiagonalPokeScore(               game.board(), isWhiteTurn,  gameProgress256);
+
+        int oppBishopQuality= bishopQualityScore(oppositeSideBB,   game.board(), !isWhiteTurn, gameProgress256);
+        int oppDiagPoke     = longDiagonalPokeScore(               game.board(),!isWhiteTurn,  gameProgress256);
+
+        // Batch C additions
+        int spaceScoreUs    = spaceScore(                          game.board(), isWhiteTurn,  gameProgress256);
+        int queen7thUs      = queen7thScore(sideBB,                game.board(), isWhiteTurn,  gameProgress256);
+        int doubledRooksUs  = doubledRooksScore(sideBB,            game.board(), isWhiteTurn,  gameProgress256);
+        int outsidePassUs   = outsidePasserBonus(sideBB,           game.board(), isWhiteTurn,  gameProgress256);
+        int candPassUs      = candidatePassersScore(sideBB,        game.board(), isWhiteTurn,  gameProgress256);
+        int egKingActUs     = endgameKingActivityBonus(            game.board(), isWhiteTurn,  gameProgress256);
+
+        int spaceScoreOp    = spaceScore(                          game.board(), !isWhiteTurn, gameProgress256);
+        int queen7thOp      = queen7thScore(oppositeSideBB,        game.board(), !isWhiteTurn, gameProgress256);
+        int doubledRooksOp  = doubledRooksScore(oppositeSideBB,    game.board(), !isWhiteTurn, gameProgress256);
+        int outsidePassOp   = outsidePasserBonus(oppositeSideBB,   game.board(), !isWhiteTurn, gameProgress256);
+        int candPassOp      = candidatePassersScore(oppositeSideBB,game.board(), !isWhiteTurn, gameProgress256);
+        int egKingActOp     = endgameKingActivityBonus(            game.board(), !isWhiteTurn, gameProgress256);
+
+        long whiteAtt = allAttacksForSide(game.board(), true);
+        long blackAtt = allAttacksForSide(game.board(), false);
+        int threatDiff = simpleThreatScoreDiff(game.board(), isWhiteTurn, whiteAtt, blackAtt, gameProgress256);
+
+        return (playerScore + rookShape + knOutposts + passerExtras
+            + bishopQuality + threatDiff + diagPoke
+            + spaceScoreUs + queen7thUs + doubledRooksUs + outsidePassUs + candPassUs + egKingActUs)
+            - (opponentScore + oppRookShape + oppKnOutposts + oppPasserExtras
+            + oppBishopQuality + oppDiagPoke
+            + spaceScoreOp + queen7thOp + doubledRooksOp + outsidePassOp + candPassOp + egKingActOp)
+            + pawnsScore;
     }
 
     private static int materialPlusPst(long sideBB, Board b, boolean isWhite, int phase256) {
@@ -745,4 +788,664 @@ public class PositionEvaluator {
         int im = 256 - phase256, ie = phase256;
         return ((mg * im + eg * ie) + 128) >> 8;
     }
+
+    // Rooks: pay only for *useful* 7th and a tiny king-file alignment; no generic file bonus; cap term
+    private static int rookFileAnd7thScore(long sideBB, Board b, boolean isWhite, int phase256) {
+        long rooks = b.rookBB & sideBB;
+        if (rooks == 0) return 0;
+
+        long oppP = b.pawnBB & (isWhite ? b.blackBB : b.whiteBB);
+        long oppKBB = b.kingBB & (isWhite ? b.blackBB : b.whiteBB);
+        int oppKingSq   = (oppKBB != 0) ? Long.numberOfTrailingZeros(oppKBB) : 60;
+        int oppKingFile = oppKingSq & 7;
+
+        int mg = 0, eg = 0;
+        while (rooks != 0) {
+            int s = Long.numberOfTrailingZeros(rooks); rooks &= rooks - 1;
+            int file = s & 7;
+            int rank = s >>> 3;
+
+            // 7th rank: require target on 7th or real activity along the rank
+            boolean on7 = isWhite ? (rank == 6) : (rank == 1);
+            if (on7) {
+                long rankMask = OrthogonalMoveUtils.RANKS[isWhite ? 6 : 1];
+                boolean target = ((oppP & rankMask) != 0) ||
+                    ((b.kingBB & (isWhite ? b.blackBB : b.whiteBB) & rankMask) != 0);
+                long attOnRank = Rook.getAttackBB(s, b.gameBB) & rankMask;
+                boolean activeOn7 = Long.bitCount(attOnRank) >= 2;
+
+                if (target || activeOn7) {
+                    mg += 2 + (target ? 2 : 0);
+                    eg += 10 + (target ? 6 : 0);
+                }
+            }
+
+            // Tiny nudge if close to king file (prevents overeager hunts)
+            if (Math.abs(file - oppKingFile) <= 1) {
+                mg += 1;
+                eg += 2;
+            }
+        }
+
+        // Cap per-side to avoid stacking (conservative)
+        mg = Math.min(mg, 16);
+        eg = Math.min(eg, 24);
+
+        int im = 256 - phase256, ie = phase256;
+        return ((mg * im + eg * ie) + 128) >> 8;
+    }
+
+    // Knight outposts: no enemy pawn on adjacent files that can ever attack the square (future presence), bigger if pawn-supported
+    private static int knightOutpostScore(long sideBB, Board b, boolean isWhite, int phase256) {
+        long kn = b.knightBB & sideBB;
+        if (kn == 0) return 0;
+
+        long myP  = b.pawnBB & sideBB;
+        long oppP = b.pawnBB & (isWhite ? b.blackBB : b.whiteBB);
+
+        int mg = 0, eg = 0;
+        while (kn != 0) {
+            int s = Long.numberOfTrailingZeros(kn); kn &= kn - 1;
+            int f = s & 7, r = s >>> 3;
+
+            // Future enemy pawns on adjacent files "ahead" can eventually attack this square -> not an outpost
+            long adjFiles = 0L;
+            if (f > 0) adjFiles |= OrthogonalMoveUtils.FILES[f - 1];
+            if (f < 7) adjFiles |= OrthogonalMoveUtils.FILES[f + 1];
+
+            long ahead;
+            if (isWhite) {
+                // Guard r==7 to avoid << 64 (which becomes << 0 on longs)
+                long ranksAhead = (r == 7) ? 0L : (~0L << ((r + 1) * 8));  // ranks r+1..7
+                ahead = oppP & adjFiles & ranksAhead;
+            } else {
+                // Black pawns move toward lower ranks; ranks 0..r-1 are "ahead"
+                long ranksAhead = (r == 0) ? 0L : ((1L << (r * 8)) - 1);   // ranks 0..r-1
+                ahead = oppP & adjFiles & ranksAhead;
+            }
+            if (ahead != 0) continue; // enemy pawn could eventually attack -> not a true outpost
+
+            // pawn-supported required for payout
+            boolean supported;
+            if (isWhite) {
+                long sup = 0L;
+                if (f > 0 && s - 9 >= 0) sup |= 1L << (s - 9);
+                if (f < 7 && s - 7 >= 0) sup |= 1L << (s - 7);
+                supported = (myP & sup) != 0;
+            } else {
+                long sup = 0L;
+                if (f > 0 && s + 7 <= 63) sup |= 1L << (s + 7);
+                if (f < 7 && s + 9 <= 63) sup |= 1L << (s + 9);
+                supported = (myP & sup) != 0;
+            }
+            if (!supported) continue; // no free lunch: unsupported "outposts" don't score
+
+            int adv  = isWhite ? r : (7 - r);
+            int tier = (adv >= 5) ? 1 : (adv >= 4 ? 1 : 0);
+            int edgePenalty = (f == 0 || f == 7) ? 1 : 0;
+
+            mg += 3 + tier * 2 - edgePenalty; // slightly calmer than before
+            eg += 2 + tier * 2 - edgePenalty;
+        }
+
+        int im = 256 - phase256, ie = phase256;
+        return ((mg * im + eg * ie) + 128) >> 8;
+    }
+
+
+    // Passed-pawn extras: rook behind, king race, connected passers
+// Passed-pawn extras: tiny, EG-weighted; avoid overlap with phalanx/support
+    private static int passedPawnExtrasScore(long sideBB, Board b, boolean isWhite, int phase256) {
+        long myP = b.pawnBB & sideBB;
+        if (myP == 0) return 0;
+
+        long oppBB = isWhite ? b.blackBB : b.whiteBB;
+        long myR   = b.rookBB & sideBB;
+
+        long myKBB = b.kingBB & sideBB;
+        long opKBB = b.kingBB & oppBB;
+        int myK = (myKBB != 0) ? Long.numberOfTrailingZeros(myKBB) : -1;
+        int opK = (opKBB != 0) ? Long.numberOfTrailingZeros(opKBB) : -1;
+
+        int mg = 0, eg = 0;
+        long passers = 0L;
+
+        // collect passers
+        for (long x = myP; x != 0; x &= x - 1) {
+            int s = Long.numberOfTrailingZeros(x);
+            boolean passed = isWhite
+                ? ((b.pawnBB & oppBB & FRONT_W[s]) == 0)
+                : ((b.pawnBB & oppBB & FRONT_B[s]) == 0);
+            if (passed) passers |= 1L << s;
+        }
+        if (passers == 0) return 0;
+
+        long x = passers;
+        while (x != 0) {
+            int s = Long.numberOfTrailingZeros(x); x &= x - 1;
+            int f = s & 7, r = s >>> 3;
+
+            // rook behind passer with clear path (EG-only)
+            if (myR != 0) {
+                for (long rr = myR; rr != 0; rr &= rr - 1) {
+                    int rsq = Long.numberOfTrailingZeros(rr);
+                    if ((rsq & 7) != f) continue;
+                    boolean behind = isWhite ? (rsq < s) : (rsq > s);
+                    if (!behind) continue;
+                    long between = max.chess.engine.movegen.utils.ObstructedLinesUtils.OBSTRUCTED_BB[rsq][s];
+                    if ((between & b.gameBB) == 0) { /* mg += 0; */ eg += 5; break; }
+                }
+            }
+
+            // king race (EG only, 1 cp per square)
+            if (myK >= 0 && opK >= 0) {
+                int diff = tchebychevDistance(Position.of(opK), Position.of(s)) - tchebychevDistance(Position.of(myK), Position.of(s));
+                if (diff > 0) eg += Math.min(diff, 4); // EG-only, cap small
+            }
+
+            // connected passers only (both are passed) to avoid overlap with general phalanx bonus
+            long adjFiles = 0L;
+            if (f > 0) adjFiles |= OrthogonalMoveUtils.FILES[f - 1];
+            if (f < 7) adjFiles |= OrthogonalMoveUtils.FILES[f + 1];
+
+            boolean connSame = (passers & adjFiles & OrthogonalMoveUtils.RANKS[r]) != 0;
+            boolean connStep = isWhite
+                ? (r < 7 && (passers & adjFiles & OrthogonalMoveUtils.RANKS[r + 1]) != 0)
+                : (r > 0 && (passers & adjFiles & OrthogonalMoveUtils.RANKS[r - 1]) != 0);
+            if (connSame || connStep) { /* mg += 0; */ eg += 4; }
+        }
+
+        eg = Math.min(eg, 14);
+        int im = 256 - phase256, ie = phase256;
+        return ((mg * im + eg * ie) + 128) >> 8;
+    }
+    // --------------------- Batch B helpers ---------------------
+
+    // Bishop quality: (a) bad bishop penalty by own pawns on bishop color; (b) "good" bishop on long diagonals.
+// Conservative, phase-blended, capped.
+    private static int bishopQualityScore(long sideBB, Board b, boolean isWhite, int phase256) {
+        long myP = b.pawnBB & sideBB;
+        long myB = b.bishopBB & sideBB;
+        if (myB == 0) return 0;
+
+        // Count our pawns on light vs dark squares
+        final long LIGHT = LIGHT_SQUARES;
+        final long DARK  = ~LIGHT;
+
+        int mg = 0, eg = 0;
+
+        long bb = myB;
+        while (bb != 0) {
+            int s = Long.numberOfTrailingZeros(bb); bb &= bb - 1;
+
+            // compute bishop reach with and without our own pawns on the board
+            long occAll     = b.gameBB;
+            long occNoOwnP  = occAll & ~(myP);  // strip our pawns only
+
+            long attAll     = Bishop.getAttackBB(s, occAll);
+            long attNoOwn   = Bishop.getAttackBB(s, occNoOwnP);
+
+            // own-pawn blockage = extra squares we'd get if our pawns vanished
+            int ownBlockage = Math.max(0, Long.bitCount(attNoOwn) - Long.bitCount(attAll));
+
+            // penalty for own-pawn blockage (tiny)
+            mg -= 2 * ownBlockage;
+            eg -= 1 * ownBlockage;
+
+            // good-bishop heuristic: long, clean diagonals
+            int reach = Long.bitCount(attAll);
+            if (reach >= 8) { mg += 2; eg += 3; }
+            else if (reach >= 6) { mg += 1; eg += 2; }
+
+            // small extra if bishop eyes central squares
+            if ((attAll & CENTER_16) != 0) { mg += 1; eg += 1; }
+
+        }
+
+        // cap so two bishops don’t run away with it
+        mg = Math.max(-24, Math.min(24, mg));
+        eg = Math.max(-16, Math.min(32, eg));
+
+        int im = 256 - phase256, ie = phase256;
+        return ((mg * im + eg * ie) + 128) >> 8;
+    }
+
+    // Simple threats: bonus if we attack an undefended enemy piece; penalty if ours are attacked and undefended.
+// Tiny, capped, king excluded.
+    private static int simpleThreatScore(Game game, boolean forWhite, int phase256) {
+        Board b = game.board();
+        long sideBB = forWhite ? b.whiteBB : b.blackBB;
+        long oppBB  = forWhite ? b.blackBB : b.whiteBB;
+
+        long occ = b.gameBB;
+
+        // All-attacks maps (fast unions; no SEE)
+        long ourAtt = attacksForSide(b, forWhite, occ);
+        long oppAtt = attacksForSide(b, !forWhite, occ);
+
+        int mg = 0, eg = 0;
+
+        // Our pieces hanging?
+        long ours = sideBB & ~b.kingBB;
+        while (ours != 0) {
+            int s = Long.numberOfTrailingZeros(ours); ours &= ours - 1;
+            long sq = 1L << s;
+            boolean attacked = (oppAtt & sq) != 0;
+            boolean defended = (ourAtt & sq) != 0;
+            if (attacked && !defended) {
+                int w = pieceBucketPenalty(b, s); // tiny per type
+                mg -= w; eg -= (w >> 1);
+            }
+        }
+
+        // Their pieces hanging?
+        long theirs = oppBB & ~b.kingBB;
+        while (theirs != 0) {
+            int s = Long.numberOfTrailingZeros(theirs); theirs &= theirs - 1;
+            long sq = 1L << s;
+            boolean attacked = (ourAtt & sq) != 0;
+            boolean defended = (oppAtt & sq) != 0;
+            if (attacked && !defended) {
+                int w = pieceBucketPenalty(b, s);
+                mg += w; eg += (w >> 1);
+            }
+        }
+
+        // cap to avoid noise
+        mg = Math.max(-24, Math.min(24, mg));
+        eg = Math.max(-16, Math.min(16, eg));
+
+        int im = 256 - phase256, ie = phase256;
+        return ((mg * im + eg * ie) + 128) >> 8;
+    }
+
+    // Long-diagonal poke at king: bishop/queen aligned with enemy king with <=1 blocker on a diagonal.
+// Very small; aims to reward latent mating geometry.
+    private static int longDiagonalPokeScore(Board b, boolean forWhite, int phase256) {
+        long sideBB = forWhite ? b.whiteBB : b.blackBB;
+        long oppBB  = forWhite ? b.blackBB : b.whiteBB;
+        long occ    = b.gameBB;
+
+        long oppKBB = b.kingBB & oppBB;
+        if (oppKBB == 0) return 0;
+        int ksq = Long.numberOfTrailingZeros(oppKBB);
+
+        long bishops = (b.bishopBB | b.queenBB) & sideBB;
+        if (bishops == 0) return 0;
+
+        int mg = 0, eg = 0;
+        long bb = bishops;
+        while (bb != 0) {
+            int s = Long.numberOfTrailingZeros(bb); bb &= bb - 1;
+
+            // Check if s and ksq are on same diagonal: difference abs(x1-x2) == abs(y1-y2)
+            int sx = s & 7, sy = s >>> 3, kx = ksq & 7, ky = ksq >>> 3;
+            if (Math.abs(sx - kx) != Math.abs(sy - ky)) continue;
+
+            long between = max.chess.engine.movegen.utils.ObstructedLinesUtils.OBSTRUCTED_BB[s][ksq];
+            int blockers = Long.bitCount(between & occ);
+            if (blockers <= 1) {
+                mg += 1;  // minuscule
+                eg += 2;
+            }
+        }
+
+        mg = Math.min(mg, 4);
+        eg = Math.min(eg, 6);
+
+        int im = 256 - phase256, ie = phase256;
+        return ((mg * im + eg * ie) + 128) >> 8;
+    }
+
+// Utilities -------------------------------------------------
+
+    // Union of attacks for one side given current occupancy
+    private static long attacksForSide(Board b, boolean forWhite, long occ) {
+        long side = forWhite ? b.whiteBB : b.blackBB;
+        long att = 0L;
+
+        // Pawns
+        long pawns = b.pawnBB & side;
+        if (forWhite) {
+            long left  = (pawns << 7) & ~OrthogonalMoveUtils.FILES[7];
+            long right = (pawns << 9) & ~OrthogonalMoveUtils.FILES[0];
+            att |= left | right;
+        } else {
+            long left  = (pawns >>> 9) & ~OrthogonalMoveUtils.FILES[7];
+            long right = (pawns >>> 7) & ~OrthogonalMoveUtils.FILES[0];
+            att |= left | right;
+        }
+
+        // Knights
+        for (long x = (b.knightBB & side); x != 0; x &= x - 1) {
+            int s = Long.numberOfTrailingZeros(x);
+            att |= Knight.getAttackBB(s);
+        }
+
+        // Bishops and Queens (diagonals)
+        long diag = (b.bishopBB | b.queenBB) & side;
+        for (long x = diag; x != 0; x &= x - 1) {
+            int s = Long.numberOfTrailingZeros(x);
+            att |= Bishop.getAttackBB(s, occ);
+        }
+
+        // Rooks and Queens (orthogonals)
+        long ortho = (b.rookBB | b.queenBB) & side;
+        for (long x = ortho; x != 0; x &= x - 1) {
+            int s = Long.numberOfTrailingZeros(x);
+            att |= Rook.getAttackBB(s, occ);
+        }
+
+        // King
+        for (long x = (b.kingBB & side); x != 0; x &= x - 1) {
+            int s = Long.numberOfTrailingZeros(x);
+            att |= King.getAttackBB(s);
+        }
+
+        return att;
+    }
+
+    // Tiny threat bucket per piece type (don’t overfit to material values)
+    private static int pieceBucketPenalty(Board b, int sq) {
+        long bit = 1L << sq;
+        if ((b.pawnBB & bit) != 0)   return 2;
+        if ((b.knightBB & bit) != 0) return 3;
+        if ((b.bishopBB & bit) != 0) return 3;
+        if ((b.rookBB & bit) != 0)   return 4;
+        if ((b.queenBB & bit) != 0)  return 5;
+        return 0; // king excluded
+    }
+    // Compute union of attacks for one side (allocation-free)
+    private static long allAttacksForSide(Board b, boolean forWhite) {
+        long side = forWhite ? b.whiteBB : b.blackBB;
+        long occ  = b.gameBB;
+        long att  = 0L;
+
+        // Pawns
+        long pawns = b.pawnBB & side;
+        if (forWhite) {
+            att |= ((pawns << 7) & ~OrthogonalMoveUtils.FILES[7])
+                | ((pawns << 9) & ~OrthogonalMoveUtils.FILES[0]);
+        } else {
+            att |= ((pawns >>> 9) & ~OrthogonalMoveUtils.FILES[7])
+                | ((pawns >>> 7) & ~OrthogonalMoveUtils.FILES[0]);
+        }
+
+        // Knights
+        for (long x = (b.knightBB & side); x != 0; x &= x - 1) {
+            att |= Knight.getAttackBB(Long.numberOfTrailingZeros(x));
+        }
+        // Bishops & Queens (diagonals)
+        for (long x = ((b.bishopBB | b.queenBB) & side); x != 0; x &= x - 1) {
+            att |= Bishop.getAttackBB(Long.numberOfTrailingZeros(x), occ);
+        }
+        // Rooks & Queens (orthogonals)
+        for (long x = ((b.rookBB | b.queenBB) & side); x != 0; x &= x - 1) {
+            att |= Rook.getAttackBB(Long.numberOfTrailingZeros(x), occ);
+        }
+        // King
+        for (long x = (b.kingBB & side); x != 0; x &= x - 1) {
+            att |= King.getAttackBB(Long.numberOfTrailingZeros(x));
+        }
+        return att;
+    }
+
+    // Threat difference: (our undefended hits - their undefended hits), tiny/capped, skip deep EG
+    private static int simpleThreatScoreDiff(Board b, boolean usWhite, long whiteAtt, long blackAtt, int phase256) {
+        if (phase256 >= 208) return 0; // deep EG: threats mostly irrelevant, skip entirely
+
+        long ourSide = usWhite ? b.whiteBB : b.blackBB;
+        long oppSide = usWhite ? b.blackBB : b.whiteBB;
+
+        long ourAtt = usWhite ? whiteAtt : blackAtt;
+        long oppAtt = usWhite ? blackAtt : whiteAtt;
+
+        int mg = 0, eg = 0;
+
+        // Our pieces hanging (excluding king)
+        for (long x = (ourSide & ~b.kingBB); x != 0; x &= x - 1) {
+            int s = Long.numberOfTrailingZeros(x);
+            long sq = 1L << s;
+            if ((oppAtt & sq) != 0 && (ourAtt & sq) == 0) {
+                int w = pieceBucketPenalty(b, s);
+                mg -= w; eg -= (w >> 1);
+            }
+        }
+
+        // Their pieces hanging (excluding king)
+        for (long x = (oppSide & ~b.kingBB); x != 0; x &= x - 1) {
+            int s = Long.numberOfTrailingZeros(x);
+            long sq = 1L << s;
+            if ((ourAtt & sq) != 0 && (oppAtt & sq) == 0) {
+                int w = pieceBucketPenalty(b, s);
+                mg += w; eg += (w >> 1);
+            }
+        }
+
+        // caps
+        mg = Math.max(-20, Math.min(20, mg));
+        eg = Math.max(-12, Math.min(12, eg));
+
+        int im = 256 - phase256, ie = phase256;
+        return ((mg * im + eg * ie) + 128) >> 8;
+    }
+// --------------------- Batch C helpers ---------------------
+
+    // Space / territory (MG-only): our controlled, safe, empty squares in opponent's half.
+// Uses union-of-attacks minus enemy pawn attacks; tight cap.
+    private static int spaceScore(Board b, boolean forWhite, int phase256) {
+        if (phase256 >= 192) return 0; // MG-oriented
+
+        long occ = b.gameBB;
+        long ourAtt = allAttacksForSide(b, forWhite);
+        long oppPawns = b.pawnBB & (forWhite ? b.blackBB : b.whiteBB);
+
+        // squares attacked by opponent pawns (unsafe to occupy)
+        long oppPawnAtt;
+        if (forWhite) {
+            oppPawnAtt = ((oppPawns >>> 9) & ~OrthogonalMoveUtils.FILES[7])
+                | ((oppPawns >>> 7) & ~OrthogonalMoveUtils.FILES[0]);
+        } else {
+            oppPawnAtt = ((oppPawns << 7) & ~OrthogonalMoveUtils.FILES[7])
+                | ((oppPawns << 9) & ~OrthogonalMoveUtils.FILES[0]);
+        }
+
+        // Opponent half
+        long oppHalf = 0L;
+        if (forWhite) {
+            // ranks 4..7
+            oppHalf = OrthogonalMoveUtils.RANKS[4] | OrthogonalMoveUtils.RANKS[5]
+                | OrthogonalMoveUtils.RANKS[6] | OrthogonalMoveUtils.RANKS[7];
+        } else {
+            // ranks 0..3
+            oppHalf = OrthogonalMoveUtils.RANKS[0] | OrthogonalMoveUtils.RANKS[1]
+                | OrthogonalMoveUtils.RANKS[2] | OrthogonalMoveUtils.RANKS[3];
+        }
+
+        long safeEmptyControlled = ourAtt & ~oppPawnAtt & oppHalf & ~occ;
+        int count = Long.bitCount(safeEmptyControlled);
+
+        // 1 cp per 2 squares, cap 24
+        int mg = Math.min(24, count / 2);
+        int eg = 0;
+
+        int im = 256 - phase256, ie = phase256;
+        return ((mg * im + eg * ie) + 128) >> 8;
+    }
+
+    // Queen on 7th rank (useful only): target on 7th or active along the rank. Modest.
+    private static int queen7thScore(long sideBB, Board b, boolean isWhite, int phase256) {
+        long q = b.queenBB & sideBB;
+        if (q == 0) return 0;
+
+        int mg = 0, eg = 0;
+        long opp = isWhite ? b.blackBB : b.whiteBB;
+        long oppP = b.pawnBB & opp;
+        int targetRank = isWhite ? 6 : 1;
+        long rankMask  = OrthogonalMoveUtils.RANKS[targetRank];
+
+        for (long x = q; x != 0; x &= x - 1) {
+            int s = Long.numberOfTrailingZeros(x);
+            int rank = s >>> 3;
+            if (rank != targetRank) continue;
+
+            boolean target = ((oppP & rankMask) != 0) || ((b.kingBB & opp & rankMask) != 0);
+            long attOnRank = (Bishop.getAttackBB(s, b.gameBB) | Rook.getAttackBB(s, b.gameBB)) & rankMask;
+            boolean active = Long.bitCount(attOnRank) >= 2;
+
+            if (target || active) {
+                mg += 1 + (target ? 1 : 0);
+                eg += 8 + (target ? 4 : 0);
+            }
+        }
+        mg = Math.min(mg, 8);
+        eg = Math.min(eg, 16);
+
+        int im = 256 - phase256, ie = phase256;
+        return ((mg * im + eg * ie) + 128) >> 8;
+    }
+
+    // Doubled rooks on semi-open/open file: tiny structural bonus, phase-blended, capped.
+    private static int doubledRooksScore(long sideBB, Board b, boolean isWhite, int phase256) {
+        long rooks = b.rookBB & sideBB;
+        if (Long.bitCount(rooks) < 2) return 0;
+
+        long myP  = b.pawnBB & sideBB;
+        long oppP = b.pawnBB & (isWhite ? b.blackBB : b.whiteBB);
+
+        int mg = 0, eg = 0;
+        for (int file = 0; file < 8; file++) {
+            long fMask = OrthogonalMoveUtils.FILES[file];
+            int rCount = Long.bitCount(rooks & fMask);
+            if (rCount < 2) continue;
+
+            boolean open = ((myP | oppP) & fMask) == 0;
+            boolean semi = !open && (myP & fMask) == 0;
+            if (open || semi) { mg += 2; eg += 4; }
+        }
+
+        mg = Math.min(mg, 6);
+        eg = Math.min(eg, 10);
+
+        int im = 256 - phase256, ie = phase256;
+        return ((mg * im + eg * ie) + 128) >> 8;
+    }
+
+    // Outside passer (EG-only): passer sits outside all our other pawns (leftmost or rightmost file).
+    private static int outsidePasserBonus(long sideBB, Board b, boolean isWhite, int phase256) {
+        long myP = b.pawnBB & sideBB;
+        if (myP == 0) return 0;
+
+        long opp = isWhite ? b.blackBB : b.whiteBB;
+        long passers = 0L;
+
+        // Detect passers
+        for (long x = myP; x != 0; x &= x - 1) {
+            int s = Long.numberOfTrailingZeros(x);
+            boolean passed = isWhite
+                ? ((b.pawnBB & opp & FRONT_W[s]) == 0)
+                : ((b.pawnBB & opp & FRONT_B[s]) == 0);
+            if (passed) passers |= 1L << s;
+        }
+        if (passers == 0) return 0;
+
+        int eg = 0;
+        long others = myP;
+        for (long p = passers; p != 0; p &= p - 1) {
+            int s = Long.numberOfTrailingZeros(p);
+            int f = s & 7;
+
+            long rest = others & ~(1L << s);
+            if (rest == 0) continue; // lone pawn: ignore
+
+            // Find min/max file among our other pawns
+            int minF = 7, maxF = 0;
+            for (long r = rest; r != 0; r &= r - 1) {
+                int rs = Long.numberOfTrailingZeros(r);
+                int rf = rs & 7;
+                if (rf < minF) minF = rf;
+                if (rf > maxF) maxF = rf;
+            }
+            boolean outside = f < minF || f > maxF;
+            if (outside) eg += 6;
+        }
+
+        eg = Math.min(eg, 12);
+        int im = 256 - phase256, ie = phase256;
+        return ((0 * im + eg * ie) + 128) >> 8;
+    }
+
+    // Candidate passers (MG-only): near-passers with no opposing pawn in front on same file and at most one on adjacent files ahead.
+    private static int candidatePassersScore(long sideBB, Board b, boolean isWhite, int phase256) {
+        if (phase256 >= 192) return 0;
+        long myP  = b.pawnBB & sideBB;
+        long oppP = b.pawnBB & (isWhite ? b.blackBB : b.whiteBB);
+        if (myP == 0) return 0;
+
+        int mg = 0;
+        for (long x = myP; x != 0; x &= x - 1) {
+            int s = Long.numberOfTrailingZeros(x);
+            int f = s & 7, r = s >>> 3;
+
+            // Not already passed
+            boolean passed = isWhite
+                ? ((oppP & FRONT_W[s]) == 0)
+                : ((oppP & FRONT_B[s]) == 0);
+            if (passed) continue;
+
+            // Same-file enemy pawns ahead?
+            long aheadSameFile = isWhite
+                ? ((r == 7) ? 0L : (~0L << ((r + 1) * 8)))
+                : ((r == 0) ? 0L : ((1L << (r * 8)) - 1));
+            boolean sameFileBlock = (oppP & OrthogonalMoveUtils.FILES[f] & aheadSameFile) != 0;
+            if (sameFileBlock) continue;
+
+            // At most one enemy pawn on adjacent files ahead
+            long adjFiles = 0L;
+            if (f > 0) adjFiles |= OrthogonalMoveUtils.FILES[f - 1];
+            if (f < 7) adjFiles |= OrthogonalMoveUtils.FILES[f + 1];
+            long ahead = isWhite
+                ? ((r == 7) ? 0L : (~0L << ((r + 1) * 8)))
+                : ((r == 0) ? 0L : ((1L << (r * 8)) - 1));
+            int adjCount = Long.bitCount(oppP & adjFiles & ahead);
+            if (adjCount <= 1) mg += 3;  // tiny
+        }
+
+        mg = Math.min(mg, 12);
+        int im = 256 - phase256, ie = phase256;
+        return ((mg * im + 0 * ie) + 128) >> 8;
+    }
+
+    // Endgame king activity (EG-only): reward being closer to center than opponent, without double-counting your king EG term.
+    private static int endgameKingActivityBonus(Board b, boolean usWhite, int phase256) {
+        if (phase256 < 192) return 0;
+        if (b.queenBB != 0) return 0; // only when queens are off
+
+        long ourK = b.kingBB & (usWhite ? b.whiteBB : b.blackBB);
+        long opK  = b.kingBB & (usWhite ? b.blackBB : b.whiteBB);
+        if (ourK == 0 || opK == 0) return 0;
+
+        int us   = Long.numberOfTrailingZeros(ourK);
+        int them = Long.numberOfTrailingZeros(opK);
+
+        // Distance to center via Chebyshev (4 central squares)
+        int usD = chebToCenter(us);
+        int thD = chebToCenter(them);
+        int diff = thD - usD; // >0 if we’re closer
+
+        int eg = Math.max(0, Math.min(6, diff)); // 1 cp per step, up to +6
+        return ((0 * (256 - phase256) + eg * phase256) + 128) >> 8;
+    }
+
+    private static int chebToCenter(int sq) {
+        int x = sq & 7, y = sq >>> 3;
+        // closest of d4,e4,d5,e5 (27,28,35,36)
+        int d4 = Math.max(Math.abs(x - 3), Math.abs(y - 3));
+        int e4 = Math.max(Math.abs(x - 4), Math.abs(y - 3));
+        int d5 = Math.max(Math.abs(x - 3), Math.abs(y - 4));
+        int e5 = Math.max(Math.abs(x - 4), Math.abs(y - 4));
+        int m1 = Math.min(d4, e4), m2 = Math.min(d5, e5);
+        return Math.min(m1, m2);
+    }
+
 }

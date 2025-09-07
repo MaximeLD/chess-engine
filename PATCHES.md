@@ -4,17 +4,41 @@ This repository uses chat-delivered patches tracked here. Each patch is identifi
 
 ## Index
 
-| ID            | Title                                           | Date (Europe/Paris) | Status   | Affected                                            |
-|---------------|-------------------------------------------------|---------------------|----------|-----------------------------------------------------|
-| CE-v10.0-P002 | SE fix: per-ply exclude + stricter gates        | 2025-09-06          | PROPOSED | SearchContext.java, Negamax.java, SearchConfig.java |
-| CE-v10.0-P001 | Singular Extension v1 (PV-only)                 | 2025-09-06          | PROPOSED | SearchConfig.java, SearchContext.java, Negamax.java |
-| CE-v9.0-P001  | Razoring at shallow depth (d≤2)                 | 2025-09-06          | PROPOSED | Negamax.java                                        |
-| CE-v8.0-P004  | Soften LMP; disable HP by default; safety gates | 2025-09-06          | PROPOSED | SearchConfig.java (defaults), Negamax.java          |
-| CE-v8.0-P003  | LMP + History Pruning (non-PV, shallow)         | 2025-09-06          | PROPOSED | SearchConfig.java, Negamax.java                     |
-| CE-v7.3-P002  | Root PV/bestMove sanity checks (debug-only)     | 2025-09-06          | PROPOSED | SearchFacade.java                                   |
-| CE-v7.3-P001  | Introduce PATCHES.md and .editorconfig          | 2025-09-06          | APPLIED  | PATCHES.md, .editorconfig                           |
+| ID            | Title                                                                                        | Date (Europe/Paris) | Status   | Affected                                            |
+|---------------|----------------------------------------------------------------------------------------------|---------------------|----------|-----------------------------------------------------|
+| CE-v11.0-P003 | Eval Batch C: space, queen-7th, doubled rooks, outside & candidate passers, EG king activity | 2025-09-07          | PROPOSED | PositionEvaluator.java                              |
+| CE-v11.0-P002 | Eval: bishop quality, simple threats, long-diagonal poke                                     | 2025-09-07          | PROPOSED | PositionEvaluator.java                              |
+| CE-v11.0-P001 | Evaluator: rooks/open+7th; outposts; passer FX                                               | 2025-09-06          | PROPOSED | PositionEvaluator.java                              |
+| CE-v10.0-P002 | SE fix: per-ply exclude + stricter gates                                                     | 2025-09-06          | PROPOSED | SearchContext.java, Negamax.java, SearchConfig.java |
+| CE-v10.0-P001 | Singular Extension v1 (PV-only)                                                              | 2025-09-06          | PROPOSED | SearchConfig.java, SearchContext.java, Negamax.java |
+| CE-v9.0-P001  | Razoring at shallow depth (d≤2)                                                              | 2025-09-06          | PROPOSED | Negamax.java                                        |
+| CE-v8.0-P004  | Soften LMP; disable HP by default; safety gates                                              | 2025-09-06          | PROPOSED | SearchConfig.java (defaults), Negamax.java          |
+| CE-v8.0-P003  | LMP + History Pruning (non-PV, shallow)                                                      | 2025-09-06          | PROPOSED | SearchConfig.java, Negamax.java                     |
+| CE-v7.3-P002  | Root PV/bestMove sanity checks (debug-only)                                                  | 2025-09-06          | PROPOSED | SearchFacade.java                                   |
+| CE-v7.3-P001  | Introduce PATCHES.md and .editorconfig                                                       | 2025-09-06          | APPLIED  | PATCHES.md, .editorconfig                           |
 
 ---
+
+## CE-v11.0-P003
+- Space (MG-only, safe & capped).
+- Queen on 7th (useful-only).
+- Doubled rooks on semi/open files (tiny).
+- Outside passer (EG-only).
+- Candidate passers (MG-only).
+- Endgame king activity (EG-only, queens off, relative to opponent).
+- All weights conservative to avoid search noise.
+- 
+## CE-v11.0-P002
+- **Title:** Evaluator: bishop quality, simple threats, long-diagonal king poke
+- **Rationale:** Cheap, general heuristics that improve move ordering and conversion without bloating the tree.
+- **Risk:** Low. Conservative weights, tight caps, allocation-free.
+- **Testing:** A/B vs v10 and v11.0-P005 with identical openings/TC. Expect small Elo uptick; if noisy, trim the caps by 25%.
+
+## CE-v11.0-P001
+- **Title:** Evaluator: rooks/open+7th; knight outposts; passed-pawn extras
+- **Rationale:** Three classic, low-risk heuristics that convert mobility and pawn advantages into real pressure and cleaner endgames.
+- **Risk:** Low. Weights conservative and phase-blended.
+- **Testing:** Bench vs v10 with identical TC/openings; expect small speed-neutral Elo gain. Check a few KRP vs KR endgames for improved conversion.
 
 ## CE-v10.0-P001
 - **Title:** Singular Extension v1 (PV-only)
