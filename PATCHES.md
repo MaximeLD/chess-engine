@@ -4,18 +4,19 @@ This repository uses chat-delivered patches tracked here. Each patch is identifi
 
 ## Index
 
-| ID            | Title                                                                                        | Date (Europe/Paris) | Status   | Affected                                            |
-|---------------|----------------------------------------------------------------------------------------------|---------------------|----------|-----------------------------------------------------|
-| CE-v11.0-P003 | Eval Batch C: space, queen-7th, doubled rooks, outside & candidate passers, EG king activity | 2025-09-07          | PROPOSED | PositionEvaluator.java                              |
-| CE-v11.0-P002 | Eval: bishop quality, simple threats, long-diagonal poke                                     | 2025-09-07          | PROPOSED | PositionEvaluator.java                              |
-| CE-v11.0-P001 | Evaluator: rooks/open+7th; outposts; passer FX                                               | 2025-09-06          | PROPOSED | PositionEvaluator.java                              |
-| CE-v10.0-P002 | SE fix: per-ply exclude + stricter gates                                                     | 2025-09-06          | PROPOSED | SearchContext.java, Negamax.java, SearchConfig.java |
-| CE-v10.0-P001 | Singular Extension v1 (PV-only)                                                              | 2025-09-06          | PROPOSED | SearchConfig.java, SearchContext.java, Negamax.java |
-| CE-v9.0-P001  | Razoring at shallow depth (d≤2)                                                              | 2025-09-06          | PROPOSED | Negamax.java                                        |
-| CE-v8.0-P004  | Soften LMP; disable HP by default; safety gates                                              | 2025-09-06          | PROPOSED | SearchConfig.java (defaults), Negamax.java          |
-| CE-v8.0-P003  | LMP + History Pruning (non-PV, shallow)                                                      | 2025-09-06          | PROPOSED | SearchConfig.java, Negamax.java                     |
-| CE-v7.3-P002  | Root PV/bestMove sanity checks (debug-only)                                                  | 2025-09-06          | PROPOSED | SearchFacade.java                                   |
-| CE-v7.3-P001  | Introduce PATCHES.md and .editorconfig                                                       | 2025-09-06          | APPLIED  | PATCHES.md, .editorconfig                           |
+| ID            | Title                                                                                        | Date (Europe/Paris) | Status   | Affected                                                         |
+|---------------|----------------------------------------------------------------------------------------------|---------------------|----------|------------------------------------------------------------------|
+| CE-v12.0-P001 | Opening book (Polyglot) + UCI options + search hook                                          | 2025-09-07          | PROPOSED | book/*, uci/UciEngineImpl.java, utils/notations/MoveIOUtils.java |
+| CE-v11.0-P003 | Eval Batch C: space, queen-7th, doubled rooks, outside & candidate passers, EG king activity | 2025-09-07          | PROPOSED | PositionEvaluator.java                                           |
+| CE-v11.0-P002 | Eval: bishop quality, simple threats, long-diagonal poke                                     | 2025-09-07          | PROPOSED | PositionEvaluator.java                                           |
+| CE-v11.0-P001 | Evaluator: rooks/open+7th; outposts; passer FX                                               | 2025-09-06          | PROPOSED | PositionEvaluator.java                                           |
+| CE-v10.0-P002 | SE fix: per-ply exclude + stricter gates                                                     | 2025-09-06          | PROPOSED | SearchContext.java, Negamax.java, SearchConfig.java              |
+| CE-v10.0-P001 | Singular Extension v1 (PV-only)                                                              | 2025-09-06          | PROPOSED | SearchConfig.java, SearchContext.java, Negamax.java              |
+| CE-v9.0-P001  | Razoring at shallow depth (d≤2)                                                              | 2025-09-06          | PROPOSED | Negamax.java                                                     |
+| CE-v8.0-P004  | Soften LMP; disable HP by default; safety gates                                              | 2025-09-06          | PROPOSED | SearchConfig.java (defaults), Negamax.java                       |
+| CE-v8.0-P003  | LMP + History Pruning (non-PV, shallow)                                                      | 2025-09-06          | PROPOSED | SearchConfig.java, Negamax.java                                  |
+| CE-v7.3-P002  | Root PV/bestMove sanity checks (debug-only)                                                  | 2025-09-06          | PROPOSED | SearchFacade.java                                                |
+| CE-v7.3-P001  | Introduce PATCHES.md and .editorconfig                                                       | 2025-09-06          | APPLIED  | PATCHES.md, .editorconfig                                        |
 
 ---
 
@@ -27,7 +28,7 @@ This repository uses chat-delivered patches tracked here. Each patch is identifi
 - Candidate passers (MG-only).
 - Endgame king activity (EG-only, queens off, relative to opponent).
 - All weights conservative to avoid search noise.
-- 
+
 ## CE-v11.0-P002
 - **Title:** Evaluator: bishop quality, simple threats, long-diagonal king poke
 - **Rationale:** Cheap, general heuristics that improve move ordering and conversion without bloating the tree.

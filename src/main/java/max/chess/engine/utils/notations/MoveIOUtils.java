@@ -202,4 +202,28 @@ public class MoveIOUtils {
                         .toString())
                 .toList();
     }
+
+    public static String toUCINotation(int move) {
+        int from = max.chess.engine.movegen.Move.getStartPosition(move);
+        int to   = max.chess.engine.movegen.Move.getEndPosition(move);
+        byte promo = max.chess.engine.movegen.Move.getPieceType(move); // in this encoding it holds promotion piece for promos
+
+        String s = toSquare(from) + toSquare(to);
+        // promotion (only for pawn promotions)
+        if (promo == max.chess.engine.utils.PieceUtils.KNIGHT
+            || promo == max.chess.engine.utils.PieceUtils.BISHOP
+            || promo == max.chess.engine.utils.PieceUtils.ROOK
+            || promo == max.chess.engine.utils.PieceUtils.QUEEN) {
+            char c = switch (promo) {
+                case 2 -> 'n'; case 3 -> 'b'; case 4 -> 'r'; case 5 -> 'q'; default -> 0;
+            };
+            if (c != 0) s += c;
+        }
+        return s;
+    }
+
+    private static String toSquare(int idx) {
+        int f = idx & 7, r = idx >>> 3;
+        return "" + (char)('a' + f) + (char)('1' + r);
+    }
 }
