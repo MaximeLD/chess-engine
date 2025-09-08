@@ -166,7 +166,7 @@ public final class UciServer {
                         send("bestmove " + res.bestmove);
                 }
             } catch (Throwable t) {
-                send("string ERROR: "+t.getMessage());
+                send("string info ERROR: "+t.getMessage());
                 t.printStackTrace();
                 // As a last resort, don't crash the GUI
                 send("bestmove 0000");

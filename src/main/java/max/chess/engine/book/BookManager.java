@@ -82,7 +82,7 @@ public final class BookManager {
         if (pliesPlayed > policy.maxPlies()) return Optional.empty();
 
         long seed = System.nanoTime() ^ Thread.currentThread().getId();
-        return book.pickMove(game, policy, seed).map(MoveIOUtils::toUCINotation);
+        return book.pickMove(game, policy, seed).map(MoveIOUtils::writeAlgebraicNotation);
     }
 
     private static java.nio.file.Path resolveBin(java.nio.file.Path hint) throws java.io.IOException {

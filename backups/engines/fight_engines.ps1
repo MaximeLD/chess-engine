@@ -27,15 +27,16 @@ md $outputFolder -ea 0
 & "$cutechess" `
   -engine name=$baseline cmd="cmd" arg="/c" arg="run-$baseline.cmd" dir="$PSScriptRoot" proto=uci `
   -engine name=$candidateName cmd="cmd" arg="/c" arg="run-$candidate.cmd" dir="$PSScriptRoot" proto=uci `
-  -each st=0.075 timemargin=150 `
-  -openings file="$bookPath" format=pgn order=sequential plies=8 policy=round `
+  -each st=1 timemargin=500 `
   -srand 123456 `
   -repeat `
-  -games 50 -concurrency 6 `
+  -openings file="$bookPath" format=pgn order=sequential plies=4 policy=round `
+  -games 1000 -concurrency 1 `
   -recover `
   -ratinginterval 10 `
   -outcomeinterval 10 `
   -pgnout "$outputPgn"
+
 
 #  -resign movecount=3 score=500 `
 #  -draw movenumber=50 movecount=100 score=150 `

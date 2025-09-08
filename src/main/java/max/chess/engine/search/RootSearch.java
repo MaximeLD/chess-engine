@@ -16,7 +16,9 @@ final class RootSearch {
                                       int rootAlpha, int rootBeta,
                                       AtomicBoolean stop, long start, long budgetNs,
                                       Consumer<String> out) {
-        out.accept("string Searching at depth " + depth);
+        if(ctx.cfg.debug) {
+            out.accept("string info Searching at depth " + depth);
+        }
         ctx.nodes = 0; // per-depth nodes
         ctx.rootIsWhite = ColorUtils.isWhite(game.currentPlayer);
         // At root there is no previous move
@@ -113,7 +115,9 @@ final class RootSearch {
 
         if (ctx.tt != null) {
             TranspositionTable tt = ctx.tt;
-            out.accept(tt.snapshot().toInfoStringForUCI(tt));
+            if(ctx.cfg.debug) {
+                out.accept(tt.snapshot().toInfoStringForUCI(tt));
+            }
         }
 
         if (zStart != game.zobristKey()) {
@@ -124,7 +128,10 @@ final class RootSearch {
         long totalMs = Math.max(1, (now - start) / 1_000_000);
         long nps = (ctx.totalNodes * 1000L) / totalMs;
 
-        out.accept(ctx.toUCIInfo(depth));
+        if(ctx.cfg.debug) {
+            out.accept(ctx.toUCIInfo(depth));
+        }
+
         return new SearchResult(bestMove, bestScore, ctx.totalNodes, totalMs, nps, pvLine);
     }
 

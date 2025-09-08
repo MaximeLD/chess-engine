@@ -4,21 +4,35 @@ This repository uses chat-delivered patches tracked here. Each patch is identifi
 
 ## Index
 
-| ID            | Title                                                                                        | Date (Europe/Paris) | Status   | Affected                                                         |
-|---------------|----------------------------------------------------------------------------------------------|---------------------|----------|------------------------------------------------------------------|
-| CE-v12.0-P001 | Opening book (Polyglot) + UCI options + search hook                                          | 2025-09-07          | PROPOSED | book/*, uci/UciEngineImpl.java, utils/notations/MoveIOUtils.java |
-| CE-v11.0-P003 | Eval Batch C: space, queen-7th, doubled rooks, outside & candidate passers, EG king activity | 2025-09-07          | PROPOSED | PositionEvaluator.java                                           |
-| CE-v11.0-P002 | Eval: bishop quality, simple threats, long-diagonal poke                                     | 2025-09-07          | PROPOSED | PositionEvaluator.java                                           |
-| CE-v11.0-P001 | Evaluator: rooks/open+7th; outposts; passer FX                                               | 2025-09-06          | PROPOSED | PositionEvaluator.java                                           |
-| CE-v10.0-P002 | SE fix: per-ply exclude + stricter gates                                                     | 2025-09-06          | PROPOSED | SearchContext.java, Negamax.java, SearchConfig.java              |
-| CE-v10.0-P001 | Singular Extension v1 (PV-only)                                                              | 2025-09-06          | PROPOSED | SearchConfig.java, SearchContext.java, Negamax.java              |
-| CE-v9.0-P001  | Razoring at shallow depth (d≤2)                                                              | 2025-09-06          | PROPOSED | Negamax.java                                                     |
-| CE-v8.0-P004  | Soften LMP; disable HP by default; safety gates                                              | 2025-09-06          | PROPOSED | SearchConfig.java (defaults), Negamax.java                       |
-| CE-v8.0-P003  | LMP + History Pruning (non-PV, shallow)                                                      | 2025-09-06          | PROPOSED | SearchConfig.java, Negamax.java                                  |
-| CE-v7.3-P002  | Root PV/bestMove sanity checks (debug-only)                                                  | 2025-09-06          | PROPOSED | SearchFacade.java                                                |
-| CE-v7.3-P001  | Introduce PATCHES.md and .editorconfig                                                       | 2025-09-06          | APPLIED  | PATCHES.md, .editorconfig                                        |
+| ID            | Title                                                                                        | Date (Europe/Paris) | Status   | Affected                                                                            |
+|---------------|----------------------------------------------------------------------------------------------|---------------------|----------|-------------------------------------------------------------------------------------|
+| CE-v13.0-P001 | Syzygy endgame tables: DTZ at root, WDL inside search                                        | 2025-09-07          | PROPOSED | tb/*, search/SearchFacade.java, tb/TBManager.java, search/{Negamax,Quiescence}.java |
+| CE-v12.0-P001 | Opening book (Polyglot) + UCI options + search hook                                          | 2025-09-07          | PROPOSED | book/*, uci/UciEngineImpl.java, utils/notations/MoveIOUtils.java                    |
+| CE-v11.0-P003 | Eval Batch C: space, queen-7th, doubled rooks, outside & candidate passers, EG king activity | 2025-09-07          | PROPOSED | PositionEvaluator.java                                                              |
+| CE-v11.0-P002 | Eval: bishop quality, simple threats, long-diagonal poke                                     | 2025-09-07          | PROPOSED | PositionEvaluator.java                                                              |
+| CE-v11.0-P001 | Evaluator: rooks/open+7th; outposts; passer FX                                               | 2025-09-06          | PROPOSED | PositionEvaluator.java                                                              |
+| CE-v10.0-P002 | SE fix: per-ply exclude + stricter gates                                                     | 2025-09-06          | PROPOSED | SearchContext.java, Negamax.java, SearchConfig.java                                 |
+| CE-v10.0-P001 | Singular Extension v1 (PV-only)                                                              | 2025-09-06          | PROPOSED | SearchConfig.java, SearchContext.java, Negamax.java                                 |
+| CE-v9.0-P001  | Razoring at shallow depth (d≤2)                                                              | 2025-09-06          | PROPOSED | Negamax.java                                                                        |
+| CE-v8.0-P004  | Soften LMP; disable HP by default; safety gates                                              | 2025-09-06          | PROPOSED | SearchConfig.java (defaults), Negamax.java                                          |
+| CE-v8.0-P003  | LMP + History Pruning (non-PV, shallow)                                                      | 2025-09-06          | PROPOSED | SearchConfig.java, Negamax.java                                                     |
+| CE-v7.3-P002  | Root PV/bestMove sanity checks (debug-only)                                                  | 2025-09-06          | PROPOSED | SearchFacade.java                                                                   |
+| CE-v7.3-P001  | Introduce PATCHES.md and .editorconfig                                                       | 2025-09-06          | APPLIED  | PATCHES.md, .editorconfig                                                           |
 
 ---
+
+## CE-v13.0-P001
+- **Title:** Syzygy endgame tables: DTZ at root, WDL inside search
+- **Rationale:** Use DTZ to pick a root move that respects the 50-move rule; use WDL for fast exact/static results at interior nodes and quiescence.
+- **Risk:** Low. Guarded by piece-count/enable flags; falls back to normal search when out of scope.
+- **Testing:** Unit tests for probeWDL/probeRoot already pass; quick matches in 3–5 man endings show faster convergence and correct 50-move handling.
+
+**CE-v12.0-P001**
+- Add OpeningBook API and BookManager.
+- Implement memory-mapped PolyglotBook (.bin): binary search by key, legal-move validation, weighted selection.
+- UCI options: OwnBook, BookFile, BookMaxPlies, BookMinWeight, BookRandomness, BookPreferMainline.
+- Probe book before search; return book move when available.
+- Reuse existing Polyglot Zobrist table (ZobristHashKeys).
 
 ## CE-v11.0-P003
 - Space (MG-only, safe & capped).

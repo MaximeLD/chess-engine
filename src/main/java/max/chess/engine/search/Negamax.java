@@ -3,8 +3,8 @@ package max.chess.engine.search;
 import max.chess.engine.game.Game;
 import max.chess.engine.movegen.Move;
 import max.chess.engine.search.transpositiontable.TranspositionTable;
+import max.chess.engine.tb.TBUtils;
 import max.chess.engine.utils.ColorUtils;
-import max.chess.engine.utils.notations.FENUtils;
 
 final class Negamax {
 
@@ -23,6 +23,12 @@ final class Negamax {
                       long start, long budgetNs,
                       boolean inNullMove, boolean isPV) {
         if (TimeControl.aborted(stop, start, budgetNs)) return Integer.MIN_VALUE;
+
+        int wdlBias = 0;
+        if (ctx.tbProbeInSearch && ctx.tb != null) {
+            var w = ctx.tb.probeWDL(game);
+            if (w.isPresent()) wdlBias = TBUtils.scoreFromWDL(w.getAsInt());
+        }
 
         final long z0 = game.zobristKey();
         final int alphaOrig = alpha;
@@ -70,6 +76,8 @@ final class Negamax {
 
         // Cheap stand-pat; if already >= beta, null search likely to cut
         int standPat = StaticEvalCache.get(game, ctx);
+        // wdlBias will be 0 if syzygy knowledge is disabled
+        standPat += wdlBias;
 
         // Reverse Futility Pruning (very conservative)
         // Non-PV, not in check, shallow depth only, and far from mate bounds.

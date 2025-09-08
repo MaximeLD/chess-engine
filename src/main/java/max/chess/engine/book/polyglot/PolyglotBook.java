@@ -151,7 +151,8 @@ public final class PolyglotBook implements OpeningBook {
         while (lo < hi) {
             int mid = (lo + hi) >>> 1;
             long k = getKey(mid);
-            if (k < key) lo = mid + 1; else hi = mid;
+            int cmp = Long.compareUnsigned(k, key);
+            if (cmp < 0) lo = mid + 1; else hi = mid;
         }
         return lo;
     }
@@ -160,7 +161,8 @@ public final class PolyglotBook implements OpeningBook {
         while (lo < hi) {
             int mid = (lo + hi) >>> 1;
             long k = getKey(mid);
-            if (k <= key) lo = mid + 1; else hi = mid;
+            int cmp = Long.compareUnsigned(k, key);
+            if (cmp <= 0) lo = mid + 1; else hi = mid;
         }
         return lo;
     }

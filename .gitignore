@@ -6,6 +6,9 @@ backups/
 bayeselo/
 cutechess/
 lichess-bot/
+/syzygy/
+/books/
+src/native/build/
 .idea/
 *.zip
 lichess.api

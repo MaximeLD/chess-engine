@@ -1,1 +1,1 @@
-C:\Users\maxim\.jdks\graalvm-jdk-24.0.2\bin\java.exe -jar ${project.build.finalName}.jar
+C:\Users\maxim\.jdks\graalvm-jdk-24.0.2\bin\java.exe -Dbook.path=C:\workspace\development\projects\chess\books\titan -Dsyzygy.path=C:\workspace\development\projects\chess\syzygy\3-4-5\Syzygy345  -jar ${project.build.finalName}.jar

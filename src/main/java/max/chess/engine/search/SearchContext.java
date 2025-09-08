@@ -46,6 +46,9 @@ public final class SearchContext {
     // svExcludeAtPly[ply] == 0 means "no exclusion at this ply"
     public final int[] svExcludeAtPly = new int[SearchConstants.STACK_PLY];
 
+    // TB wiring
+    public max.chess.engine.tb.TBManager tb = null;
+    public boolean tbProbeInSearch = false;
 
     // TT
     public final TranspositionTable tt; // nullable if disabled
