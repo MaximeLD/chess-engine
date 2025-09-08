@@ -138,8 +138,11 @@ public class FENUtils {
         if("-".equals(enPassantSquare)) {
             game.board().setEnPassantIndex(-1);
         } else {
+            // The en passant was for the previous colour
+//            game.previousTurn();
             Position positionFromSquare = MoveIOUtils.getPositionFromSquare(enPassantSquare);
             game.board().setEnPassantIndex(positionFromSquare.getFlatIndex());
+//            game.nextTurn();
         }
     }
 

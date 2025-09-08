@@ -2,6 +2,7 @@ package max.chess.engine.search;
 
 import max.chess.engine.game.Game;
 import max.chess.engine.search.transpositiontable.TranspositionTable;
+import max.chess.engine.tb.TBUtils;
 
 final class Quiescence {
 
@@ -11,6 +12,13 @@ final class Quiescence {
 
         final long z0 = g.zobristKey();
         ctx.totalNodes++; ctx.qNodes++;
+
+        // If enabled, treat WDL as a stand-pat baseline; do NOT return early.
+        int standPatFromTB = Integer.MIN_VALUE;
+        if (ctx.tbProbeInSearch && ctx.tb != null) {
+            var w = ctx.tb.probeWDL(g);
+            if (w.isPresent()) standPatFromTB = TBUtils.scoreFromWDL(w.getAsInt());
+        }
 
         final long key = g.zobristKey();
         final int alphaOrig = alpha;
@@ -63,6 +71,8 @@ final class Quiescence {
 
         // Stand-pat using static eval (TT cached if available)
         int standPat = StaticEvalCache.get(g, ctx);
+        if (standPatFromTB != Integer.MIN_VALUE) standPat = Math.max(standPat, standPatFromTB);
+
         if (standPat >= beta) { if (ctx.tt != null) ctx.tt.store(key, 0, 0, standPat, TranspositionTable.TT_LOWER, ply);
             return standPat;
         }

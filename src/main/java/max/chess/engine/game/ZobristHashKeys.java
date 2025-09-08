@@ -11,7 +11,7 @@ public class ZobristHashKeys {
     private static final int EN_PASSANT_HASH_OFFSET = 772;
     private static final int TURN_HASH_OFFSET = 780;
     public static String print(long key) {
-        return String.format("0x%08X", key);
+        return String.format("0x%016X", key);
     }
     public static long readHexa(String hexadecimalKey) {
         return Long.parseUnsignedLong(hexadecimalKey, 16);

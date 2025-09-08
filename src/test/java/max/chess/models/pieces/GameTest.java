@@ -85,9 +85,9 @@ public class GameTest {
     @Test
     public void gameShouldDetect_drawBy50MovesRule() {
         // Given
-        // We start with a board on which we have 49 moves on the half move clock
+        // We start with a board on which we have 99 moves on the half move clock
         // The black rook is on b3, the white rook is on a3 ; all the squares on 3rd rank and above are free
-        String testFen = "8/8/8/8/8/Rr6/N6n/KN4nk b - - 49 102"; // black to move
+        String testFen = "8/8/8/8/8/Rr6/N6n/KN4nk b - - 99 102"; // black to move
 
         Game game = BoardGenerator.from(testFen);
 

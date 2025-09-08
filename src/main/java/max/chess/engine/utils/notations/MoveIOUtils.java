@@ -198,7 +198,7 @@ public class MoveIOUtils {
 
     public static List<String> getMoveListString(int[] moves) {
         return Arrays.stream(moves)
-                .mapToObj(move -> new Move(Move.getStartPosition(move), Move.getEndPosition(move), Move.getPieceType(move))
+                .mapToObj(move -> new Move(Move.getStartPosition(move), Move.getEndPosition(move), Move.getPromotion(move))
                         .toString())
                 .toList();
     }
